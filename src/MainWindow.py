@@ -796,12 +796,17 @@ class Ui_MainWindow(object):
         #Open open file dialog window
         name = QFileDialog.getOpenFileName(self.MainWindow, "Open File",  None, 'Json files (*.json)')
         
+        # Check if user cancelled
+        if version == 5:
+            if not name[0]:
+                return
+            name = name[0]
+        elif not name:
+            return
+        
         #Clear the list of anything
         self.listWidget.clear()
         try:
-            #Version stuff
-            if version == 5: name = name[0]
-            
             #Set dictionaries with incoming vars
             self.commonVars, self.rotorVars, self.statorVars = map(list, zip(*list(StageOpen(name))))
             
@@ -809,8 +814,43 @@ class Ui_MainWindow(object):
             for i in range(1, len(self.commonVars) + 1):
                 self.listWidget.addItem("Stage {}".format(i))
             
+            # Mark file as open and select first stage
+            self.fileOpen = True
+            self.clicked = 0
+            
+            # Populate UI fields with first stage data
+            if self.commonVars and self.rotorVars and self.statorVars:
+                for dict in [self.commonVars[0], self.rotorVars[0], self.statorVars[0]]:
+                    for obj in dict:
+                        widget = self.MainWindow.findChild(QLineEdit, obj)
+                        if widget:
+                            widget.setText(str(dict[obj]))
+                
+                # Select first item in list
+                self.listWidget.setCurrentRow(0)
+                
+                # Show success message
+                box = QMessageBox(self.MainWindow)
+                box.setText("File Loaded Successfully")
+                box.setInformativeText(f"Loaded {len(self.commonVars)} stage(s) from file.")
+                box.setWindowTitle("Load Success")
+                box.setIcon(QMessageBox.Information)
+                box.exec_()
+            
         except EOFError: 
-            print("Invalid File, Confirm File is Correct")
+            box = QMessageBox(self.MainWindow)
+            box.setText("Invalid File Format")
+            box.setInformativeText("Confirm file is a valid CompPy JSON file.")
+            box.setWindowTitle("Load Error")
+            box.setIcon(QMessageBox.Critical)
+            box.exec_()
+        except Exception as e:
+            box = QMessageBox(self.MainWindow)
+            box.setText("Error Loading File")
+            box.setInformativeText(f"An error occurred: {str(e)}")
+            box.setWindowTitle("Load Error")
+            box.setIcon(QMessageBox.Critical)
+            box.exec_()
             
             
     ################################
@@ -858,7 +898,25 @@ class Ui_MainWindow(object):
         #Save dictionaries to .json file
         if not name.lower().endswith('.json'):
             name += '.json'
-        StageSave(name, self.commonVars, self.rotorVars, self.statorVars)
+        
+        try:
+            StageSave(name, self.commonVars, self.rotorVars, self.statorVars)
+            
+            # Show success message
+            box = QMessageBox(self.MainWindow)
+            box.setText("File Saved Successfully")
+            box.setInformativeText(f"Saved {len(self.commonVars)} stage(s) to:\n{name}")
+            box.setWindowTitle("Save Success")
+            box.setIcon(QMessageBox.Information)
+            box.exec_()
+            
+        except Exception as e:
+            box = QMessageBox(self.MainWindow)
+            box.setText("Error Saving File")
+            box.setInformativeText(f"An error occurred: {str(e)}")
+            box.setWindowTitle("Save Error")
+            box.setIcon(QMessageBox.Critical)
+            box.exec_()
     
     
     ################################
