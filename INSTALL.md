@@ -23,7 +23,7 @@ Instead of installing PyQt5 in the virtual environment, you can use the system P
 
 1. Install system packages:
 ```bash
-sudo apt install python3-pyqt5 python3-pyqt5.qtwidgets
+sudo apt install python3-pyqt5
 ```
 
 2. Create venv with system packages access:

@@ -46,7 +46,7 @@ On Ubuntu/Debian::
 
 **Alternative:** Use system PyQt5 (easier)::
 
-    sudo apt install python3-pyqt5 python3-pyqt5.qtwidgets
+    sudo apt install python3-pyqt5
 
 Then follow these steps:
 
