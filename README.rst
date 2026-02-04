@@ -140,7 +140,15 @@ New Features
 - **Drag-and-Drop Reordering**: Reorder stages by dragging them in the stage list
 - **Real-time Validation**: Enhanced visual feedback with explanatory tooltips for invalid inputs
 
-See ``docs/UI_ENHANCEMENTS.md`` for detailed documentation.
+**Quick Wins (High Impact Features):**
+
+- **Recent Files Menu**: Quick access to recently opened designs (File > Recent Files)
+- **Progress Indicators**: Visual feedback during long STL mesh generation operations
+- **Error Logging**: Automatic logging of all errors to `~/.comppy/logs/` for debugging
+- **Default Parameters**: New stages automatically filled with sensible, validated defaults
+- **Keyboard Shortcuts**: Ctrl+O (Open), Ctrl+S (Save), Ctrl+Z (Undo), Ctrl+Y (Redo)
+
+See ``docs/UI_ENHANCEMENTS.md`` and ``docs/QUICK_WINS.md`` for detailed documentation.
 
 
 What's To Come

@@ -16,6 +16,9 @@ from UndoRedo import UndoRedoManager
 from Tooltips import get_tooltip, get_validation_message
 from Presets import get_preset_names, get_preset, get_preset_description
 from AssemblyViewer import AssemblyViewer
+from RecentFiles import RecentFilesManager
+from ErrorLogger import logger
+from DefaultParameters import get_default_parameters, validate_design_rules, apply_defaults_to_stage
 
 
 class Ui_MainWindow(object):
@@ -74,6 +77,13 @@ class Ui_MainWindow(object):
         
         # Track current values for undo
         self.field_previous_values = {}
+        
+        # Initialize recent files manager
+        self.recent_files_manager = RecentFilesManager()
+        
+        # Initialize error logger
+        logger.info("CompPy started")
+        logger.debug(f"Window size: {MainWindow.width()}x{MainWindow.height()}")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         
@@ -698,6 +708,17 @@ class Ui_MainWindow(object):
         self.actionSave.setStatusTip("Save File")
         self.actionSave.triggered.connect(self.SaveFile)
         
+        # Recent files menu
+        self.menuRecentFiles = QMenu(self.menuFile)
+        self.menuRecentFiles.setObjectName("menuRecentFiles")
+        self.UpdateRecentFilesMenu()
+        
+        # Clear recent files action
+        self.actionClearRecent = QAction(MainWindow)
+        self.actionClearRecent.setObjectName("actionClearRecent")
+        self.actionClearRecent.setStatusTip("Clear Recent Files")
+        self.actionClearRecent.triggered.connect(self.ClearRecentFiles)
+        
         # Undo/Redo actions
         self.actionUndo = QAction(MainWindow)
         self.actionUndo.setObjectName("actionUndo")
@@ -733,9 +754,18 @@ class Ui_MainWindow(object):
         self.actionToggleDarkMode.setChecked(True)
         self.actionToggleDarkMode.setStatusTip("Toggle Dark Mode")
         self.actionToggleDarkMode.triggered.connect(self.ToggleDarkMode)
+        
+        # View log file action
+        self.actionViewLog = QAction(MainWindow)
+        self.actionViewLog.setObjectName("actionViewLog")
+        self.actionViewLog.setStatusTip("View Error Log File")
+        self.actionViewLog.triggered.connect(self.ViewLogFile)
 
         self.menuFile.addAction(self.actionOpen)
         self.menuFile.addAction(self.actionSave)
+        self.menuFile.addSeparator()
+        self.menuFile.addMenu(self.menuRecentFiles)
+        self.menuRecentFiles.addAction(self.actionClearRecent)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionUndo)
         self.menuFile.addAction(self.actionRedo)
@@ -748,6 +778,8 @@ class Ui_MainWindow(object):
             self.menuPresets.addAction(action)
         
         self.menuTools.addAction(self.actionAssemblyView)
+        self.menuTools.addSeparator()
+        self.menuTools.addAction(self.actionViewLog)
         self.menuView.addAction(self.actionToggleDarkMode)
         self.menubar.addAction(self.menuFile.menuAction())
         self.menubar.addAction(self.menuPresets.menuAction())
@@ -841,14 +873,17 @@ class Ui_MainWindow(object):
         self.XT_Label_2.setText("Center of X Twist")
         self.YT_Label_2.setText("Center of Y Twist")
         self.menuFile.setTitle("File")
+        self.menuRecentFiles.setTitle("Recent Files")
         self.menuPresets.setTitle("Presets")
         self.menuTools.setTitle("Tools")
         self.menuView.setTitle("View")
         self.actionOpen.setText("Open")
         self.actionSave.setText("Save")
+        self.actionClearRecent.setText("Clear Recent Files")
         self.actionUndo.setText("Undo")
         self.actionRedo.setText("Redo")
         self.actionAssemblyView.setText("Assembly Viewer")
+        self.actionViewLog.setText("View Error Log")
         self.actionToggleDarkMode.setText("Dark Mode")
         
         # Apply dark mode theme on startup
@@ -866,19 +901,27 @@ class Ui_MainWindow(object):
         #Open open file dialog window
         name = QFileDialog.getOpenFileName(self.MainWindow, "Open File",  None, 'Json files (*.json)')
         
+        logger.info("Opening file dialog")
+        
         # Check if user cancelled
         if version == 5:
             if not name[0]:
+                logger.debug("User cancelled file open")
                 return
-            name = name[0]
-        elif not name:
-            return
+            filename = name[0]
+        else:
+            if not name:
+                logger.debug("User cancelled file open")
+                return
+            filename = name
+        
+        logger.info(f"Opening file: {filename}")
         
         #Clear the list of anything
         self.listWidget.clear()
         try:
             #Set dictionaries with incoming vars
-            self.commonVars, self.rotorVars, self.statorVars = map(list, zip(*list(StageOpen(name))))
+            self.commonVars, self.rotorVars, self.statorVars = map(list, zip(*list(StageOpen(filename))))
             
             #Add the stages
             for i in range(1, len(self.commonVars) + 1):
@@ -899,6 +942,11 @@ class Ui_MainWindow(object):
                 # Select first item in list
                 self.listWidget.setCurrentRow(0)
                 
+                # Add to recent files
+                self.recent_files_manager.add_file(filename)
+                self.UpdateRecentFilesMenu()
+                logger.info(f"Successfully opened file: {filename}")
+                
                 # Show success message
                 box = QMessageBox(self.MainWindow)
                 box.setText("File Loaded Successfully")
@@ -908,6 +956,7 @@ class Ui_MainWindow(object):
                 box.exec_()
             
         except EOFError: 
+            logger.error("Invalid file format (EOFError)")
             box = QMessageBox(self.MainWindow)
             box.setText("Invalid File Format")
             box.setInformativeText("Confirm file is a valid CompPy JSON file.")
@@ -915,6 +964,7 @@ class Ui_MainWindow(object):
             box.setIcon(QMessageBox.Critical)
             box.exec_()
         except Exception as e:
+            logger.error(f"Error loading file: {e}", exc_info=True)
             box = QMessageBox(self.MainWindow)
             box.setText("Error Loading File")
             box.setInformativeText(f"An error occurred: {str(e)}")
@@ -972,6 +1022,11 @@ class Ui_MainWindow(object):
         try:
             StageSave(name, self.commonVars, self.rotorVars, self.statorVars)
             
+            # Add to recent files
+            self.recent_files_manager.add_file(name)
+            self.UpdateRecentFilesMenu()
+            logger.info(f"Successfully saved file: {name}")
+            
             # Show success message
             box = QMessageBox(self.MainWindow)
             box.setText("File Saved Successfully")
@@ -981,6 +1036,7 @@ class Ui_MainWindow(object):
             box.exec_()
             
         except Exception as e:
+            logger.error(f"Error saving file: {e}", exc_info=True)
             box = QMessageBox(self.MainWindow)
             box.setText("Error Saving File")
             box.setInformativeText(f"An error occurred: {str(e)}")
@@ -1032,14 +1088,24 @@ class Ui_MainWindow(object):
     ##Returns:
     #none
     ################################   
-    def AddStage(self):            
-        #Add stage list item
-        self.listWidget.addItem("Stage {}".format(self.listWidget.count() + 1))
+    def AddStage(self):
+        try:
+            logger.debug("Adding new stage")
+            # Get default parameters
+            defaults = get_default_parameters()
+            
+            #Add stage list item
+            self.listWidget.addItem("Stage {}".format(self.listWidget.count() + 1))
 
-        #Add new stage vars
-        self.rotorVars.append({"Y Twist (Rotor)" : "", "X Twist (Rotor)" : "", "Tip Chord (Rotor)" : "", "Rotor Diameter" : "", "Root Chord (Rotor)" : "", "Blade Thickness (Rotor)" : "", "Hub Diameter" : "", "Hub Length" : "", "Blade Clearance" : "", "Num of Blade (Rotor)" : ""})
-        self.statorVars.append({"Duct ID" : "", "Duct Length" : "", "Duct Thickness" : "", "Num of Blade (Stator)" : "", "Mount Can Length" : "", "Mount Can Dia" : "", "Mount Can Loc" : "", "Blade Thickness (Stator)" : "", "Root Chord (Stator)" : "", "Tip Chord (Stator)" : "", "X Twist (Stator)" : "", "Y Twist (Stator)" : ""})
-        self.commonVars.append({"RPM" : "", "Loading (Psi)" : "", "Flow (Phi)" : "", "Reaction (R)" : "", "Mean Line Radius" : ""})
+            #Add new stage vars with defaults
+            self.rotorVars.append(defaults['Rotor'].copy())
+            self.statorVars.append(defaults['Stator'].copy())
+            self.commonVars.append(defaults['Stage'].copy())
+            
+            logger.info(f"Added stage {len(self.commonVars)} with default parameters")
+            
+        except Exception as e:
+            logger.error(f"Error adding stage: {e}", exc_info=True)
         
         
     ################################
@@ -1347,11 +1413,22 @@ class Ui_MainWindow(object):
                 self.CheckAllStates("R")
                 
                 #If there was no failure
-                if not self.failed: 
+                if not self.failed:
+                    # Create progress dialog
+                    progress = QProgressDialog("Generating rotor mesh...", None, 0, 0, self.MainWindow)
+                    progress.setWindowTitle("Rendering Rotor")
+                    progress.setWindowModality(Qt.WindowModal)
+                    progress.show()
+                    QApplication.processEvents()
+                    
+                    logger.info("Rendering rotor")
                     rend = RenderWindow.RenderWindow(self.MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R", self.wallCheck.isChecked())
                     self.R_FrameLayout.addWidget(rend)
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     self.exportObj = rend.returnObject()
+                    
+                    progress.close()
+                    logger.info("Rotor rendered successfully")
                     
                 #If there was a failure, show the failures
                 else: ErrorWindow(self.MainWindow, self.failed).show()
@@ -1711,6 +1788,145 @@ class Ui_MainWindow(object):
                 self.MainWindow,
                 "Assembly Viewer Error",
                 f"Could not create assembly viewer:\n{str(e)}"
+            )
+    
+    ################################
+    ##Function: UpdateRecentFilesMenu
+    #Update recent files menu with current list
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def UpdateRecentFilesMenu(self):
+        """Update recent files menu"""
+        # Clear existing actions (except Clear Recent Files)
+        self.menuRecentFiles.clear()
+        
+        # Get recent files
+        recent_files = self.recent_files_manager.get_recent_files()
+        
+        # Add recent files
+        for filepath in recent_files:
+            # Create action with just filename
+            filename = os.path.basename(filepath)
+            action = QAction(filename, self.MainWindow)
+            action.setStatusTip(filepath)
+            action.setData(filepath)
+            action.triggered.connect(lambda checked, path=filepath: self.OpenRecentFile(path))
+            self.menuRecentFiles.addAction(action)
+        
+        # Add separator if we have recent files
+        if recent_files:
+            self.menuRecentFiles.addSeparator()
+        
+        # Add clear action
+        self.menuRecentFiles.addAction(self.actionClearRecent)
+        
+        # Disable menu if no recent files
+        self.menuRecentFiles.setEnabled(len(recent_files) > 0 or True)  # Always enable for Clear option
+    
+    ################################
+    ##Function: OpenRecentFile
+    #Open a recent file
+    ##Inputs: 
+    #self: Ui_MainWindow
+    #filepath: path to file
+    ##Returns:
+    #none
+    ################################
+    def OpenRecentFile(self, filepath):
+        """Open a recent file"""
+        try:
+            logger.info(f"Opening recent file: {filepath}")
+            
+            # Check if file exists
+            if not os.path.exists(filepath):
+                QMessageBox.warning(
+                    self.MainWindow,
+                    "File Not Found",
+                    f"File no longer exists:\n{filepath}"
+                )
+                # Remove from recent files
+                self.recent_files_manager.recent_files.remove(filepath)
+                self.recent_files_manager.save()
+                self.UpdateRecentFilesMenu()
+                return
+            
+            # Clear the list
+            self.listWidget.clear()
+            
+            # Load the file
+            self.commonVars, self.rotorVars, self.statorVars = map(list, zip(*list(StageOpen(filepath))))
+            
+            # Add stages to list
+            for i in range(1, len(self.commonVars) + 1):
+                self.listWidget.addItem(f"Stage {i}")
+            
+            # Mark file as open
+            self.fileOpen = True
+            self.clicked = 0
+            
+            # Populate UI with first stage
+            if self.commonVars and self.rotorVars and self.statorVars:
+                for dict in [self.commonVars[0], self.rotorVars[0], self.statorVars[0]]:
+                    for obj in dict:
+                        widget = self.MainWindow.findChild(QLineEdit, obj)
+                        if widget:
+                            widget.setText(str(dict[obj]))
+                
+                self.listWidget.setCurrentRow(0)
+            
+            logger.info(f"Successfully opened recent file: {filepath}")
+            
+        except Exception as e:
+            logger.error(f"Error opening recent file: {e}", exc_info=True)
+            QMessageBox.critical(
+                self.MainWindow,
+                "Error Opening File",
+                f"Could not open file:\n{str(e)}"
+            )
+    
+    ################################
+    ##Function: ClearRecentFiles
+    #Clear recent files list
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def ClearRecentFiles(self):
+        """Clear recent files list"""
+        reply = QMessageBox.question(
+            self.MainWindow,
+            'Clear Recent Files',
+            'Clear all recent files from the menu?',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.recent_files_manager.clear()
+            self.UpdateRecentFilesMenu()
+            logger.info("Cleared recent files list")
+    
+    ################################
+    ##Function: ViewLogFile
+    #Open log file in default editor
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def ViewLogFile(self):
+        """Open log file"""
+        try:
+            logger.open_log_file()
+        except Exception as e:
+            QMessageBox.information(
+                self.MainWindow,
+                "Log File Location",
+                f"Log file location:\n{logger.get_log_file_path()}"
             )
     
     

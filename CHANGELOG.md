@@ -1,5 +1,83 @@
 # Changelog
 
+## [2.1.0] - 2026-02-04 - Quick Wins Implementation
+
+### Added
+
+#### Recent Files Menu
+- Recent files menu in File menu with up to 10 files
+- Quick access to recently opened designs
+- Automatic removal of non-existent files
+- "Clear Recent Files" option
+- Stored in `~/.comppy/recent_files.json`
+
+#### Progress Indicators
+- Progress dialogs during STL mesh generation
+- Shows current operation status
+- Prevents UI freezing during long operations
+- Displayed during rotor and stator rendering
+
+#### Error Logging
+- Comprehensive error logging to file
+- Log files stored in `~/.comppy/logs/`
+- Daily log files with timestamp
+- Includes DEBUG, INFO, WARNING, ERROR, CRITICAL levels
+- "View Error Log" option in Tools menu
+- Automatic cleanup of old log files (30 days)
+- Stack traces for all exceptions
+
+#### Default Parameters
+- New stages automatically filled with sensible defaults
+- Based on typical small compressor design (educational)
+- All default values are valid and within recommended ranges
+- Speeds up initial design process significantly
+
+#### Design Rule Validation
+- Automatic validation of design relationships
+- Warnings for:
+  - Hub/rotor diameter ratio
+  - Stator/rotor blade count ratio
+  - Tip clearance relative to blade height
+  - Duct ID relative to rotor diameter
+- Recommended ranges for all parameters
+
+### Enhanced
+- OpenFile and SaveFile methods now add files to recent list
+- AddStage method applies default parameters automatically
+- Render method shows progress indicators
+- All file operations logged to error log
+- Better error messages with log file references
+
+### Technical Details
+
+#### New Files
+```
+src/RecentFiles.py         - Recent files manager
+src/ErrorLogger.py          - Error logging system  
+src/DefaultParameters.py    - Defaults and validation
+tests/test_quick_wins.py    - 13 new unit tests
+docs/QUICK_WINS.md          - Complete documentation
+```
+
+#### Configuration
+- New config directory: `~/.comppy/`
+- Recent files: `~/.comppy/recent_files.json`
+- Log files: `~/.comppy/logs/comppy_YYYYMMDD.log`
+
+### Testing
+- Added 13 new unit tests
+- All 39 tests passing (26 previous + 13 new)
+- Zero test failures
+- Tests cover recent files, logging, and defaults
+
+### Benefits
+- **Faster workflow**: Recent files and defaults save time
+- **Better debugging**: Comprehensive error logging
+- **Better UX**: Progress feedback and smart defaults
+- **More reliable**: Better error handling throughout
+
+---
+
 ## [2.0.0] - 2026-02-04 - UI/UX Enhancements
 
 ### Added
