@@ -148,7 +148,7 @@ class RenderRotor(QWidget):
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(self.rotorHub.vectors))
 
         # Auto scale to the mesh size
-        scale = self.rotorHub.points.flatten(-1)
+        scale = self.rotorHub.points.flatten()
         axes.auto_scale_xyz(scale, scale, scale)
         
         xLabel = axes.set_xlabel('X')
@@ -292,7 +292,7 @@ class RenderStator(QWidget):
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(self.mountCan.vectors))
 
         # Auto scale to the mesh size
-        scale = self.mountCan.points.flatten(-1)
+        scale = self.mountCan.points.flatten()
         axes.auto_scale_xyz(scale, scale, scale)
         
         xLabel = axes.set_xlabel('X')
