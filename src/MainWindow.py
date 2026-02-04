@@ -1185,7 +1185,7 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    prof = BladePlot.NACA4Profile(self.MainWindow, self.commongVars[self.clicked], self.statorVars[self.clicked], "S")
+                    prof = BladePlot.NACA4Profile(self.MainWindow, self.commonVars[self.clicked], self.statorVars[self.clicked], "S")
                     self.R_FrameLayout.addWidget(prof)
                     prof.plotter()
                     self.R_Frame.setLayout(self.R_FrameLayout)
