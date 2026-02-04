@@ -1041,22 +1041,46 @@ class Ui_MainWindow(object):
         if self.exportObj:
             name = QFileDialog.getSaveFileName(self.MainWindow, 'Save File', None, 'STL files (*.stl)')
             
+            # Check if user cancelled
             if version == 5:
-                if not name[0].lower().endswith('.stl'):
-                    name[0] += '.stl'
-                self.exportObj.save(name[0])
-                
+                if not name[0]:
+                    return
+                filename = name[0]
             else:
-                if not name.lower().endswith('.stl'):
-                    name += '.stl'
-                self.exportObj.save(name)
+                if not name:
+                    return
+                filename = name
+            
+            # Add .stl extension if not present
+            if not filename.lower().endswith('.stl'):
+                filename += '.stl'
+            
+            try:
+                self.exportObj.save(filename)
+                
+                # Show success message
+                box = QMessageBox(self.MainWindow)
+                box.setText("STL Exported Successfully")
+                box.setInformativeText(f"Saved to:\n{filename}")
+                box.setWindowTitle("Export Success")
+                box.setIcon(QMessageBox.Information)
+                box.exec_()
+                
+            except Exception as e:
+                box = QMessageBox(self.MainWindow)
+                box.setText("Error Exporting STL")
+                box.setInformativeText(f"An error occurred: {str(e)}")
+                box.setWindowTitle("Export Error")
+                box.setIcon(QMessageBox.Critical)
+                box.exec_()
                 
         #If there was no rendered object, display error window
         else:
             box = QMessageBox(self.MainWindow)
             box.setText("Nothing to Export")
-            box.setInformativeText("Generate STL Object")
+            box.setInformativeText("Please render an STL object first using 'Render STL' button.")
             box.setWindowTitle("Export Error")
+            box.setIcon(QMessageBox.Warning)
             box.exec_()
                                 
     
