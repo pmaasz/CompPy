@@ -35,44 +35,44 @@ Dependencies
 
 Installation
 """"""""""""
-**Prerequisites:** You need system Qt libraries for the GUI to work.
+**Quick Start (Recommended for Ubuntu/Debian):**
 
-On Ubuntu/Debian::
+1. Install system PyQt5::
+
+    sudo apt install python3-pyqt5
+
+2. Clone and setup::
+
+    git clone <repository-url>
+    cd CompPy
+    python3 -m venv venv --system-site-packages
+    source venv/bin/activate
+    pip install matplotlib numpy numpy-stl
+
+3. Run::
+
+    python comppy.py
+
+**Alternative (Install PyQt5 in venv):**
+
+If you prefer to install everything in the virtual environment, you need system Qt libraries first::
 
     sudo apt update
     sudo apt install -y libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
                         libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
                         libxkbcommon-x11-0 libgl1-mesa-glx libdbus-1-3
 
-**Alternative:** Use system PyQt5 (easier)::
+Then::
 
-    sudo apt install python3-pyqt5
-
-Then follow these steps:
-
-1. Clone the repository::
-
-    git clone <repository-url>
-    cd CompPy
-
-2. Create and activate a virtual environment::
-
-    python3 -m venv venv --system-site-packages  # Allows access to system PyQt5
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-3. Install dependencies::
-
+    python3 -m venv venv
+    source venv/bin/activate
     pip install -r requirements.txt
-
-   Or if using system PyQt5, install only non-Qt packages::
-
-    pip install matplotlib numpy numpy-stl
-
-4. Run the application::
-
     python comppy.py
 
-See ``INSTALL.md`` for detailed troubleshooting and platform-specific instructions.
+**Troubleshooting:**
+
+- If you get "Could not load Qt platform plugin xcb" error, use the Quick Start method above
+- For detailed platform-specific instructions, see ``INSTALL.md``
 
 Testing
 """""""
