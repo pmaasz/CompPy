@@ -7,12 +7,66 @@ Ducted fans and axial compressors are designed using the same techniques. Given 
 
 There are many ways to calculate how the rotor will be created and how it will perform, this program utilizes the Mean Line Radius technique.
 
+Project Structure
+"""""""""""""""""
+::
+
+    CompPy/
+    ├── src/              # Source code modules
+    │   ├── BladeCalc.py       # Aerodynamic calculations
+    │   ├── BladePlot.py       # 2D blade profile plotting
+    │   ├── BladeRender.py     # 3D blade rendering
+    │   ├── StlUtils.py        # STL mesh generation utilities
+    │   ├── FileOps.py         # JSON save/load operations
+    │   ├── MainWindow.py      # Main GUI application
+    │   ├── RenderWindow.py    # 3D render window widget
+    │   └── RClickWin.py       # Dialog windows
+    ├── tests/            # Functional tests
+    ├── requirements.txt  # Python dependencies
+    └── README.rst        # This file
+
 Dependencies
 """"""""""""""""""
-- numpy 
-- matplotlib
-- numpy-stl (`Link <https://github.com/WoLpH/numpy-stl>`_)
-- PyQt 4/5: It's compatible for both PyQt4 and PyQt5
+- Python 3.6+
+- PyQt5 >= 5.15.0
+- matplotlib >= 3.3.0
+- numpy >= 1.19.0
+- numpy-stl >= 2.16.0 (`Link <https://github.com/WoLpH/numpy-stl>`_)
+
+Installation
+""""""""""""
+1. Clone the repository::
+
+    git clone <repository-url>
+    cd CompPy
+
+2. Create and activate a virtual environment (recommended)::
+
+    python3 -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+3. Install dependencies::
+
+    pip install -r requirements.txt
+
+4. Run the application::
+
+    python src/MainWindow.py
+
+Testing
+"""""""
+The project includes comprehensive functional tests covering core calculations, 
+3D mesh generation, and file operations.
+
+Run all tests::
+
+    python -m unittest discover -s tests -v
+
+Run specific test module::
+
+    python -m unittest tests.test_blade_calc -v
+
+See ``tests/README.md`` for more information.
 
 Usage
 """""
