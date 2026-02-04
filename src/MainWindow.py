@@ -711,13 +711,15 @@ class Ui_MainWindow(object):
         # Recent files menu
         self.menuRecentFiles = QMenu(self.menuFile)
         self.menuRecentFiles.setObjectName("menuRecentFiles")
-        self.UpdateRecentFilesMenu()
         
-        # Clear recent files action
+        # Clear recent files action (create before UpdateRecentFilesMenu)
         self.actionClearRecent = QAction(MainWindow)
         self.actionClearRecent.setObjectName("actionClearRecent")
         self.actionClearRecent.setStatusTip("Clear Recent Files")
         self.actionClearRecent.triggered.connect(self.ClearRecentFiles)
+        
+        # Now update the menu
+        self.UpdateRecentFilesMenu()
         
         # Undo/Redo actions
         self.actionUndo = QAction(MainWindow)
