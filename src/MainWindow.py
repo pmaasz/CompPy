@@ -32,6 +32,7 @@ class Ui_MainWindow(object):
         self.clicked = None
         self.fileOpen = False
         self.failed = []
+        self.darkMode = False
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         
@@ -637,6 +638,9 @@ class Ui_MainWindow(object):
         self.menuFile = QMenu(self.menubar)
         self.menuFile.setObjectName("menuFile")
         
+        self.menuView = QMenu(self.menubar)
+        self.menuView.setObjectName("menuView")
+        
         MainWindow.setMenuBar(self.menubar)
         
         self.actionOpen = QAction(MainWindow)
@@ -650,10 +654,19 @@ class Ui_MainWindow(object):
         self.actionSave.setShortcut("Ctrl+S")
         self.actionSave.setStatusTip("Save File")
         self.actionSave.triggered.connect(self.SaveFile)
+        
+        self.actionToggleDarkMode = QAction(MainWindow)
+        self.actionToggleDarkMode.setObjectName("actionToggleDarkMode")
+        self.actionToggleDarkMode.setCheckable(True)
+        self.actionToggleDarkMode.setChecked(False)
+        self.actionToggleDarkMode.setStatusTip("Toggle Dark Mode")
+        self.actionToggleDarkMode.triggered.connect(self.ToggleDarkMode)
 
         self.menuFile.addAction(self.actionOpen)
         self.menuFile.addAction(self.actionSave)
+        self.menuView.addAction(self.actionToggleDarkMode)
         self.menubar.addAction(self.menuFile.menuAction())
+        self.menubar.addAction(self.menuView.menuAction())
 
         #Set Tab Order
         MainWindow.setTabOrder(self.R_Line, self.PSI_Line)
@@ -735,8 +748,10 @@ class Ui_MainWindow(object):
         self.XT_Label_2.setText("Center of X Twist")
         self.YT_Label_2.setText("Center of Y Twist")
         self.menuFile.setTitle("File")
+        self.menuView.setTitle("View")
         self.actionOpen.setText("Open")
         self.actionSave.setText("Save")
+        self.actionToggleDarkMode.setText("Dark Mode")
         
     ################################
     ##Function: OpenFile
@@ -953,13 +968,13 @@ class Ui_MainWindow(object):
                 dict[sender.objectName()] = state
             else: continue
             
-        #Set color of qLineEdit box
+        #Set color of qLineEdit box (theme-aware)
         if state == QValidator.Acceptable:
-            color = "#009933" # green     
+            color = "#00cc44" if self.darkMode else "#009933" # green     
         elif state == QValidator.Intermediate:
-            color = "#ffff00" # yellow            
+            color = "#cccc00" if self.darkMode else "#ffff00" # yellow            
         else:
-            color = "#ff0000" # red
+            color = "#ff3333" if self.darkMode else "#ff0000" # red
             
         sender.setStyleSheet("QLineEdit { background-color: %s }" % color)
     
@@ -1113,6 +1128,115 @@ class Ui_MainWindow(object):
         #Reset failed list
         self.failed = []
                                 
+    
+    ################################
+    ##Function: ToggleDarkMode
+    #Toggles between light and dark mode
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################   
+    def ToggleDarkMode(self):
+        self.darkMode = not self.darkMode
+        self.ApplyTheme()
+    
+    
+    ################################
+    ##Function: ApplyTheme
+    #Applies the current theme (light or dark)
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################   
+    def ApplyTheme(self):
+        if self.darkMode:
+            # Dark mode palette
+            darkPalette = """
+                QMainWindow, QWidget {
+                    background-color: #2b2b2b;
+                    color: #e0e0e0;
+                }
+                QFrame {
+                    background-color: #323232;
+                    border: 1px solid #3f3f3f;
+                }
+                QLabel {
+                    color: #e0e0e0;
+                }
+                QLineEdit {
+                    background-color: #404040;
+                    color: #e0e0e0;
+                    border: 1px solid #555555;
+                    padding: 2px;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #0078d4;
+                }
+                QPushButton {
+                    background-color: #404040;
+                    color: #e0e0e0;
+                    border: 1px solid #555555;
+                    padding: 5px;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #4a4a4a;
+                    border: 1px solid #666666;
+                }
+                QPushButton:pressed {
+                    background-color: #353535;
+                }
+                QListWidget {
+                    background-color: #404040;
+                    color: #e0e0e0;
+                    border: 1px solid #555555;
+                }
+                QListWidget::item:selected {
+                    background-color: #0078d4;
+                }
+                QListWidget::item:hover {
+                    background-color: #4a4a4a;
+                }
+                QMenuBar {
+                    background-color: #323232;
+                    color: #e0e0e0;
+                }
+                QMenuBar::item:selected {
+                    background-color: #404040;
+                }
+                QMenu {
+                    background-color: #323232;
+                    color: #e0e0e0;
+                    border: 1px solid #555555;
+                }
+                QMenu::item:selected {
+                    background-color: #0078d4;
+                }
+                QCheckBox {
+                    color: #e0e0e0;
+                }
+            """
+            self.MainWindow.setStyleSheet(darkPalette)
+        else:
+            # Light mode (default Qt style)
+            self.MainWindow.setStyleSheet("")
+        
+        # Reapply validation colors for line edits
+        for dict in [self.commonValidators, self.rotorValidators, self.statorValidators]:
+            for name, state in dict.items():
+                if state is not None:
+                    widget = self.MainWindow.findChild(QLineEdit, name)
+                    if widget:
+                        if state == QValidator.Acceptable:
+                            color = "#009933" if not self.darkMode else "#00cc44"
+                        elif state == QValidator.Intermediate:
+                            color = "#ffff00" if not self.darkMode else "#cccc00"
+                        else:
+                            color = "#ff0000" if not self.darkMode else "#ff3333"
+                        widget.setStyleSheet("QLineEdit { background-color: %s }" % color)
+    
     
     ################################
     ##Function: closeEvent
