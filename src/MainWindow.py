@@ -63,7 +63,7 @@ class Ui_MainWindow(object):
         self.clicked = None
         self.fileOpen = False
         self.failed = []
-        self.darkMode = False
+        self.darkMode = True
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         
@@ -689,7 +689,7 @@ class Ui_MainWindow(object):
         self.actionToggleDarkMode = QAction(MainWindow)
         self.actionToggleDarkMode.setObjectName("actionToggleDarkMode")
         self.actionToggleDarkMode.setCheckable(True)
-        self.actionToggleDarkMode.setChecked(False)
+        self.actionToggleDarkMode.setChecked(True)
         self.actionToggleDarkMode.setStatusTip("Toggle Dark Mode")
         self.actionToggleDarkMode.triggered.connect(self.ToggleDarkMode)
 
@@ -783,6 +783,9 @@ class Ui_MainWindow(object):
         self.actionOpen.setText("Open")
         self.actionSave.setText("Save")
         self.actionToggleDarkMode.setText("Dark Mode")
+        
+        # Apply dark mode theme on startup
+        self.ApplyTheme()
         
     ################################
     ##Function: OpenFile
