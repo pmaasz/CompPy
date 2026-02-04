@@ -6,6 +6,9 @@ Entry point for running the application
 import sys
 import os
 
+# Suppress Qt warnings on Wayland
+os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.qpa.*=false')
+
 # Add src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
