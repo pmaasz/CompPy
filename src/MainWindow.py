@@ -16,6 +16,7 @@ from FileOps import *
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
+        self.MainWindow = MainWindow  # Store reference to MainWindow instance
         MainWindow.setObjectName("CompPy")
         MainWindow.resize(805, 583)
 
@@ -747,7 +748,7 @@ class Ui_MainWindow(object):
     ################################   
     def OpenFile(self):
         #Open open file dialog window
-        name = QFileDialog.getOpenFileName(MainWindow, "Open File",  None, 'Json files (*.json)')
+        name = QFileDialog.getOpenFileName(self.MainWindow, "Open File",  None, 'Json files (*.json)')
         
         #Clear the list of anything
         self.listWidget.clear()
@@ -776,12 +777,12 @@ class Ui_MainWindow(object):
     ################################       
     def SaveFile(self):
         #Open save file dialog window
-        name = QFileDialog.getSaveFileName(MainWindow, "Save File", None, 'Json files (*.json)')
+        name = QFileDialog.getSaveFileName(self.MainWindow, "Save File", None, 'Json files (*.json)')
         
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
+                text = self.MainWindow.findChild(QLineEdit, item).text()
                 if text:
                     dict[item] = text
         
@@ -852,7 +853,7 @@ class Ui_MainWindow(object):
         #of previously selected stage, if there is a value to change
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
+                text = self.MainWindow.findChild(QLineEdit, item).text()
                 if text:
                     dict[item] = text
 
@@ -862,7 +863,7 @@ class Ui_MainWindow(object):
         #Set each value in list of current stage to their corresponding qLineEdit
         for dict in [self.commonVars, self.rotorVars, self.statorVars]:
             for obj in dict[self.clicked]:
-                    MainWindow.findChild(QLineEdit, obj).setText(str(dict[self.clicked][obj]))
+                    self.MainWindow.findChild(QLineEdit, obj).setText(str(dict[self.clicked][obj]))
 
 
     ################################
@@ -876,7 +877,7 @@ class Ui_MainWindow(object):
     def Export(self):       
         #If object was previously generated
         if self.exportObj:
-            name = QFileDialog.getSaveFileName(MainWindow, 'Save File', None, 'STL files (*.stl)')
+            name = QFileDialog.getSaveFileName(self.MainWindow, 'Save File', None, 'STL files (*.stl)')
             
             if version == 5:
                 if not name[0].lower().endswith('.stl'):
@@ -890,7 +891,7 @@ class Ui_MainWindow(object):
                 
         #If there was no rendered object, display error window
         else:
-            box = QMessageBox(MainWindow)
+            box = QMessageBox(self.MainWindow)
             box.setText("Nothing to Export")
             box.setInformativeText("Generate STL Object")
             box.setWindowTitle("Export Error")
@@ -908,7 +909,7 @@ class Ui_MainWindow(object):
     #none
     ################################       
     def CheckState(self):
-        sender = MainWindow.sender()
+        sender = self.MainWindow.sender()
         state = sender.validator().validate(sender.text(), 0)[0]
         
         #Check every line
@@ -970,11 +971,11 @@ class Ui_MainWindow(object):
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
+                text = self.MainWindow.findChild(QLineEdit, item).text()
                 if text:
                     dict[item] = text
         
-        wind = RenderSel(MainWindow)
+        wind = RenderSel(self.MainWindow)
         wind.show()
         
         if wind.exec_():
@@ -983,14 +984,14 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    prof = BladePlot.NACA4Profile(MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R")
+                    prof = BladePlot.NACA4Profile(self.MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R")
                     self.R_FrameLayout.addWidget(prof)
                     prof.plotter()
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     prof.close()
                     
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
                     
             #If stator was picked
             elif wind.sel == 2: 
@@ -998,14 +999,14 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    prof = BladePlot.NACA4Profile(MainWindow, self.commongVars[self.clicked], self.statorVars[self.clicked], "S")
+                    prof = BladePlot.NACA4Profile(self.MainWindow, self.commongVars[self.clicked], self.statorVars[self.clicked], "S")
                     self.R_FrameLayout.addWidget(prof)
                     prof.plotter()
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     prof.close()
                 
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
             
             else: pass
             
@@ -1030,12 +1031,12 @@ class Ui_MainWindow(object):
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
+                text = self.MainWindow.findChild(QLineEdit, item).text()
                 if text:
                     dict[item] = text
                     
         #Display selction window
-        wind = RenderSel(MainWindow)
+        wind = RenderSel(self.MainWindow)
         wind.show()
         
         #Make sure self.clicked has a value
@@ -1050,13 +1051,13 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    rend = RenderWindow.RenderWindow(MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R", self.wallCheck.isChecked())
+                    rend = RenderWindow.RenderWindow(self.MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R", self.wallCheck.isChecked())
                     self.R_FrameLayout.addWidget(rend)
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     self.exportObj = rend.returnObject()
                     
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
             
             #If stator was picked
             elif wind.sel == 2: 
@@ -1064,13 +1065,13 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    rend = RenderWindow.RenderWindow(MainWindow, self.commonVars[self.clicked], self.statorVars[self.clicked], "S")
+                    rend = RenderWindow.RenderWindow(self.MainWindow, self.commonVars[self.clicked], self.statorVars[self.clicked], "S")
                     self.R_FrameLayout.addWidget(rend)
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     self.exportObj = rend.returnObject()
                 
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
             
             else: pass
   
