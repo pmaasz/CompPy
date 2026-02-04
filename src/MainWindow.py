@@ -16,6 +16,7 @@ from FileOps import *
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
+        self.MainWindow = MainWindow  # Store reference to MainWindow instance
         MainWindow.setObjectName("CompPy")
         MainWindow.resize(805, 583)
 
@@ -31,6 +32,7 @@ class Ui_MainWindow(object):
         self.clicked = None
         self.fileOpen = False
         self.failed = []
+        self.darkMode = False
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         
@@ -636,6 +638,9 @@ class Ui_MainWindow(object):
         self.menuFile = QMenu(self.menubar)
         self.menuFile.setObjectName("menuFile")
         
+        self.menuView = QMenu(self.menubar)
+        self.menuView.setObjectName("menuView")
+        
         MainWindow.setMenuBar(self.menubar)
         
         self.actionOpen = QAction(MainWindow)
@@ -649,10 +654,19 @@ class Ui_MainWindow(object):
         self.actionSave.setShortcut("Ctrl+S")
         self.actionSave.setStatusTip("Save File")
         self.actionSave.triggered.connect(self.SaveFile)
+        
+        self.actionToggleDarkMode = QAction(MainWindow)
+        self.actionToggleDarkMode.setObjectName("actionToggleDarkMode")
+        self.actionToggleDarkMode.setCheckable(True)
+        self.actionToggleDarkMode.setChecked(False)
+        self.actionToggleDarkMode.setStatusTip("Toggle Dark Mode")
+        self.actionToggleDarkMode.triggered.connect(self.ToggleDarkMode)
 
         self.menuFile.addAction(self.actionOpen)
         self.menuFile.addAction(self.actionSave)
+        self.menuView.addAction(self.actionToggleDarkMode)
         self.menubar.addAction(self.menuFile.menuAction())
+        self.menubar.addAction(self.menuView.menuAction())
 
         #Set Tab Order
         MainWindow.setTabOrder(self.R_Line, self.PSI_Line)
@@ -734,8 +748,10 @@ class Ui_MainWindow(object):
         self.XT_Label_2.setText("Center of X Twist")
         self.YT_Label_2.setText("Center of Y Twist")
         self.menuFile.setTitle("File")
+        self.menuView.setTitle("View")
         self.actionOpen.setText("Open")
         self.actionSave.setText("Save")
+        self.actionToggleDarkMode.setText("Dark Mode")
         
     ################################
     ##Function: OpenFile
@@ -747,7 +763,7 @@ class Ui_MainWindow(object):
     ################################   
     def OpenFile(self):
         #Open open file dialog window
-        name = QFileDialog.getOpenFileName(MainWindow, "Open File",  None, 'Json files (*.json)')
+        name = QFileDialog.getOpenFileName(self.MainWindow, "Open File",  None, 'Json files (*.json)')
         
         #Clear the list of anything
         self.listWidget.clear()
@@ -775,18 +791,38 @@ class Ui_MainWindow(object):
     #none
     ################################       
     def SaveFile(self):
+        # Check if we have any stages to save
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            box = QMessageBox(self.MainWindow)
+            box.setText("No Stages to Save")
+            box.setInformativeText("Please add a stage first using 'Add Stage' button.")
+            box.setWindowTitle("Save Error")
+            box.exec_()
+            return
+        
+        # Ensure we have a valid clicked index
+        if self.clicked is None or self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
         #Open save file dialog window
-        name = QFileDialog.getSaveFileName(MainWindow, "Save File", None, 'Json files (*.json)')
+        name = QFileDialog.getSaveFileName(self.MainWindow, "Save File", None, 'Json files (*.json)')
+        
+        # Check if user cancelled
+        if version == 5:
+            if not name[0]:
+                return
+            name = name[0]
+        elif not name:
+            return
         
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
-        
-        #Version stuff
-        if version == 5: name = name[0]
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
         
         #Save dictionaries to .json file
         if not name.lower().endswith('.json'):
@@ -803,16 +839,30 @@ class Ui_MainWindow(object):
     #none
     ################################   
     def RemoveStage(self):
-        #Delete current item from list
-        listItems=self.listWidget.selectedItems()
-        del self.rotorVars[int(self.listWidget.currentItem().text()[-1]) -1]
-        del self.commonVars[int(self.listWidget.currentItem().text()[-1]) -1]
-        del self.statorVars[int(self.listWidget.currentItem().text()[-1]) -1]
+        #Check if anything is selected
+        listItems = self.listWidget.selectedItems()
+        if not listItems:
+            return
         
-        #Remove deleted item from dictionaries
-        if not listItems: return        
+        currentItem = self.listWidget.currentItem()
+        if not currentItem:
+            return
+            
+        #Get the index from the stage name (e.g., "Stage 1" -> index 0)
+        try:
+            stageIndex = int(currentItem.text().split()[-1]) - 1
+        except (ValueError, IndexError):
+            return
+        
+        #Delete from data lists if index is valid
+        if 0 <= stageIndex < len(self.rotorVars):
+            del self.rotorVars[stageIndex]
+            del self.commonVars[stageIndex]
+            del self.statorVars[stageIndex]
+        
+        #Remove item from list widget
         for item in listItems:
-           self.listWidget.takeItem(self.listWidget.row(item))
+            self.listWidget.takeItem(self.listWidget.row(item))
                      
                      
     ################################
@@ -844,25 +894,46 @@ class Ui_MainWindow(object):
     #none
     ################################   
     def ListClicked(self, clicked):
+        #Check if we have any stages
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            return
+            
         #Making sure there's no overlap
-        if (self.clicked and (self.clicked < self.listWidget.count())): pass
-        else: self.clicked = 0
+        if (self.clicked and (self.clicked < self.listWidget.count())): 
+            pass
+        else: 
+            self.clicked = 0
         
-        #Set current value of qLineEdit to correspoinding dict value,
+        #Ensure clicked index is valid
+        if self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
+        #Set current value of qLineEdit to corresponding dict value,
         #of previously selected stage, if there is a value to change
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
 
         #Set currently selected stage
-        self.clicked = int(clicked.text()[-1]) - 1
+        try:
+            self.clicked = int(clicked.text().split()[-1]) - 1
+        except (ValueError, IndexError):
+            self.clicked = 0
+        
+        #Ensure new clicked index is valid
+        if self.clicked >= len(self.commonVars):
+            self.clicked = 0
         
         #Set each value in list of current stage to their corresponding qLineEdit
         for dict in [self.commonVars, self.rotorVars, self.statorVars]:
             for obj in dict[self.clicked]:
-                    MainWindow.findChild(QLineEdit, obj).setText(str(dict[self.clicked][obj]))
+                widget = self.MainWindow.findChild(QLineEdit, obj)
+                if widget:
+                    widget.setText(str(dict[self.clicked][obj]))
 
 
     ################################
@@ -876,7 +947,7 @@ class Ui_MainWindow(object):
     def Export(self):       
         #If object was previously generated
         if self.exportObj:
-            name = QFileDialog.getSaveFileName(MainWindow, 'Save File', None, 'STL files (*.stl)')
+            name = QFileDialog.getSaveFileName(self.MainWindow, 'Save File', None, 'STL files (*.stl)')
             
             if version == 5:
                 if not name[0].lower().endswith('.stl'):
@@ -890,7 +961,7 @@ class Ui_MainWindow(object):
                 
         #If there was no rendered object, display error window
         else:
-            box = QMessageBox(MainWindow)
+            box = QMessageBox(self.MainWindow)
             box.setText("Nothing to Export")
             box.setInformativeText("Generate STL Object")
             box.setWindowTitle("Export Error")
@@ -908,7 +979,7 @@ class Ui_MainWindow(object):
     #none
     ################################       
     def CheckState(self):
-        sender = MainWindow.sender()
+        sender = self.MainWindow.sender()
         state = sender.validator().validate(sender.text(), 0)[0]
         
         #Check every line
@@ -917,15 +988,16 @@ class Ui_MainWindow(object):
                 dict[sender.objectName()] = state
             else: continue
             
-        #Set color of qLineEdit box
+        #Set color of qLineEdit box (theme-aware)
         if state == QValidator.Acceptable:
-            color = "#009933" # green     
+            bgcolor = "#00cc44" if self.darkMode else "#009933" # green     
         elif state == QValidator.Intermediate:
-            color = "#ffff00" # yellow            
+            bgcolor = "#cccc00" if self.darkMode else "#ffff00" # yellow            
         else:
-            color = "#ff0000" # red
-            
-        sender.setStyleSheet("QLineEdit { background-color: %s }" % color)
+            bgcolor = "#ff3333" if self.darkMode else "#ff0000" # red
+        
+        # Always use black text on validation colors for readability
+        sender.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
     
         
     ################################
@@ -964,17 +1036,35 @@ class Ui_MainWindow(object):
     def PlotProfile(self):
         from RClickWin import RenderSel, ErrorWindow
         
+        # Check if we have any stages
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            box = QMessageBox(self.MainWindow)
+            box.setText("No Stages Available")
+            box.setInformativeText("Please add a stage first using 'Add Stage' button.")
+            box.setWindowTitle("Plot Profile Error")
+            box.exec_()
+            return
+        
+        # Ensure we have a valid clicked index
+        if self.clicked is None or self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
         #Delete Currently Occupating Widget
-        for i in reversed(range(self.R_FrameLayout.count())): self.R_FrameLayout.itemAt(i).widget().setParent(None)
+        for i in reversed(range(self.R_FrameLayout.count())): 
+            widget = self.R_FrameLayout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
         
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
         
-        wind = RenderSel(MainWindow)
+        wind = RenderSel(self.MainWindow)
         wind.show()
         
         if wind.exec_():
@@ -983,14 +1073,14 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    prof = BladePlot.NACA4Profile(MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R")
+                    prof = BladePlot.NACA4Profile(self.MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R")
                     self.R_FrameLayout.addWidget(prof)
                     prof.plotter()
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     prof.close()
                     
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
                     
             #If stator was picked
             elif wind.sel == 2: 
@@ -998,14 +1088,14 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    prof = BladePlot.NACA4Profile(MainWindow, self.commongVars[self.clicked], self.statorVars[self.clicked], "S")
+                    prof = BladePlot.NACA4Profile(self.MainWindow, self.commongVars[self.clicked], self.statorVars[self.clicked], "S")
                     self.R_FrameLayout.addWidget(prof)
                     prof.plotter()
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     prof.close()
                 
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
             
             else: pass
             
@@ -1024,23 +1114,37 @@ class Ui_MainWindow(object):
     def Render(self):
         from RClickWin import RenderSel, ErrorWindow
         
+        # Check if we have any stages
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            box = QMessageBox(self.MainWindow)
+            box.setText("No Stages Available")
+            box.setInformativeText("Please add a stage first using 'Add Stage' button.")
+            box.setWindowTitle("Render Error")
+            box.exec_()
+            return
+        
+        # Ensure we have a valid clicked index
+        if self.clicked is None or self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
         #Delete Currently Occupating Widget
-        for i in reversed(range(self.R_FrameLayout.count())): self.R_FrameLayout.itemAt(i).widget().setParent(None)
+        for i in reversed(range(self.R_FrameLayout.count())): 
+            widget = self.R_FrameLayout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
         
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
-                    
-        #Display selction window
-        wind = RenderSel(MainWindow)
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
+                     
+        #Display selection window
+        wind = RenderSel(self.MainWindow)
         wind.show()
-        
-        #Make sure self.clicked has a value
-        if self.clicked: pass
-        else: self.clicked = 0
         
         #Once window is closed
         if wind.exec_():
@@ -1050,13 +1154,13 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    rend = RenderWindow.RenderWindow(MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R", self.wallCheck.isChecked())
+                    rend = RenderWindow.RenderWindow(self.MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R", self.wallCheck.isChecked())
                     self.R_FrameLayout.addWidget(rend)
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     self.exportObj = rend.returnObject()
                     
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
             
             #If stator was picked
             elif wind.sel == 2: 
@@ -1064,19 +1168,128 @@ class Ui_MainWindow(object):
                 
                 #If there was no failure
                 if not self.failed: 
-                    rend = RenderWindow.RenderWindow(MainWindow, self.commonVars[self.clicked], self.statorVars[self.clicked], "S")
+                    rend = RenderWindow.RenderWindow(self.MainWindow, self.commonVars[self.clicked], self.statorVars[self.clicked], "S")
                     self.R_FrameLayout.addWidget(rend)
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     self.exportObj = rend.returnObject()
                 
                 #If there was a failure, show the failures
-                else: ErrorWindow(MainWindow, self.failed).show()
+                else: ErrorWindow(self.MainWindow, self.failed).show()
             
             else: pass
   
         #Reset failed list
         self.failed = []
                                 
+    
+    ################################
+    ##Function: ToggleDarkMode
+    #Toggles between light and dark mode
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################   
+    def ToggleDarkMode(self):
+        self.darkMode = not self.darkMode
+        self.ApplyTheme()
+    
+    
+    ################################
+    ##Function: ApplyTheme
+    #Applies the current theme (light or dark)
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################   
+    def ApplyTheme(self):
+        if self.darkMode:
+            # Dark mode palette
+            darkPalette = """
+                QMainWindow, QWidget {
+                    background-color: #2b2b2b;
+                    color: #e0e0e0;
+                }
+                QFrame {
+                    background-color: #323232;
+                    border: 1px solid #3f3f3f;
+                }
+                QLabel {
+                    color: #e0e0e0;
+                }
+                QLineEdit {
+                    background-color: #ffffff;
+                    color: #000000;
+                    border: 1px solid #555555;
+                    padding: 2px;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #0078d4;
+                }
+                QPushButton {
+                    background-color: #404040;
+                    color: #e0e0e0;
+                    border: 1px solid #555555;
+                    padding: 5px;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #4a4a4a;
+                    border: 1px solid #666666;
+                }
+                QPushButton:pressed {
+                    background-color: #353535;
+                }
+                QListWidget {
+                    background-color: #404040;
+                    color: #e0e0e0;
+                    border: 1px solid #555555;
+                }
+                QListWidget::item:selected {
+                    background-color: #0078d4;
+                }
+                QListWidget::item:hover {
+                    background-color: #4a4a4a;
+                }
+                QMenuBar {
+                    background-color: #323232;
+                    color: #e0e0e0;
+                }
+                QMenuBar::item:selected {
+                    background-color: #404040;
+                }
+                QMenu {
+                    background-color: #323232;
+                    color: #e0e0e0;
+                    border: 1px solid #555555;
+                }
+                QMenu::item:selected {
+                    background-color: #0078d4;
+                }
+                QCheckBox {
+                    color: #e0e0e0;
+                }
+            """
+            self.MainWindow.setStyleSheet(darkPalette)
+        else:
+            # Light mode (default Qt style)
+            self.MainWindow.setStyleSheet("")
+        
+        # Reapply validation colors for line edits
+        for dict in [self.commonValidators, self.rotorValidators, self.statorValidators]:
+            for name, state in dict.items():
+                if state is not None:
+                    widget = self.MainWindow.findChild(QLineEdit, name)
+                    if widget:
+                        if state == QValidator.Acceptable:
+                            bgcolor = "#009933" if not self.darkMode else "#00cc44"
+                        elif state == QValidator.Intermediate:
+                            bgcolor = "#ffff00" if not self.darkMode else "#cccc00"
+                        else:
+                            bgcolor = "#ff0000" if not self.darkMode else "#ff3333"
+                        widget.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
+    
     
     ################################
     ##Function: closeEvent

@@ -7,12 +7,87 @@ Ducted fans and axial compressors are designed using the same techniques. Given 
 
 There are many ways to calculate how the rotor will be created and how it will perform, this program utilizes the Mean Line Radius technique.
 
+Project Structure
+"""""""""""""""""
+::
+
+    CompPy/
+    ├── src/              # Source code modules
+    │   ├── BladeCalc.py       # Aerodynamic calculations
+    │   ├── BladePlot.py       # 2D blade profile plotting
+    │   ├── BladeRender.py     # 3D blade rendering
+    │   ├── StlUtils.py        # STL mesh generation utilities
+    │   ├── FileOps.py         # JSON save/load operations
+    │   ├── MainWindow.py      # Main GUI application
+    │   ├── RenderWindow.py    # 3D render window widget
+    │   └── RClickWin.py       # Dialog windows
+    ├── tests/            # Functional tests
+    ├── requirements.txt  # Python dependencies
+    └── README.rst        # This file
+
 Dependencies
 """"""""""""""""""
-- numpy 
-- matplotlib
-- numpy-stl (`Link <https://github.com/WoLpH/numpy-stl>`_)
-- PyQt 4/5: It's compatible for both PyQt4 and PyQt5
+- Python 3.6+
+- PyQt5 >= 5.15.0
+- matplotlib >= 3.3.0
+- numpy >= 1.19.0
+- numpy-stl >= 2.16.0 (`Link <https://github.com/WoLpH/numpy-stl>`_)
+
+Installation
+""""""""""""
+**Quick Start (Recommended for Ubuntu/Debian):**
+
+1. Install system PyQt5::
+
+    sudo apt install python3-pyqt5
+
+2. Clone and setup::
+
+    git clone <repository-url>
+    cd CompPy
+    python3 -m venv venv --system-site-packages
+    source venv/bin/activate
+    pip install matplotlib numpy numpy-stl
+
+3. Run::
+
+    python comppy.py
+
+**Alternative (Install PyQt5 in venv):**
+
+If you prefer to install everything in the virtual environment, you need system Qt libraries first::
+
+    sudo apt update
+    sudo apt install -y libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+                        libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+                        libxkbcommon-x11-0 libgl1-mesa-glx libdbus-1-3
+
+Then::
+
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    python comppy.py
+
+**Troubleshooting:**
+
+- If you get "Could not load Qt platform plugin xcb" error, use the Quick Start method above
+- For detailed platform-specific instructions, see ``INSTALL.md``
+
+Testing
+"""""""
+The project includes comprehensive functional tests covering core calculations, 
+3D mesh generation, and file operations.
+
+Run all tests::
+
+    python -m unittest discover -s tests -v
+
+Run specific test module::
+
+    python -m unittest tests.test_blade_calc -v
+
+See ``tests/README.md`` for more information.
 
 Usage
 """""
@@ -56,4 +131,23 @@ Contact
 """""""
 Want to yell at me? Or have a question, shoot me an email.
 
+
+
+Dark Mode
+"""""""""
+The application includes a dark mode theme for reduced eye strain.
+
+To toggle dark mode:
+
+1. Click **View** in the menu bar
+2. Check **Dark Mode**
+
+Or simply press the menu item to toggle between light and dark themes.
+
+The dark mode includes:
+
+- Dark background (#2b2b2b) with light text
+- Styled buttons, input fields, and list widgets
+- Theme-aware validation colors (green/yellow/red)
+- Consistent styling across all UI elements
 
