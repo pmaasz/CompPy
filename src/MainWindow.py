@@ -804,16 +804,30 @@ class Ui_MainWindow(object):
     #none
     ################################   
     def RemoveStage(self):
-        #Delete current item from list
-        listItems=self.listWidget.selectedItems()
-        del self.rotorVars[int(self.listWidget.currentItem().text()[-1]) -1]
-        del self.commonVars[int(self.listWidget.currentItem().text()[-1]) -1]
-        del self.statorVars[int(self.listWidget.currentItem().text()[-1]) -1]
+        #Check if anything is selected
+        listItems = self.listWidget.selectedItems()
+        if not listItems:
+            return
         
-        #Remove deleted item from dictionaries
-        if not listItems: return        
+        currentItem = self.listWidget.currentItem()
+        if not currentItem:
+            return
+            
+        #Get the index from the stage name (e.g., "Stage 1" -> index 0)
+        try:
+            stageIndex = int(currentItem.text().split()[-1]) - 1
+        except (ValueError, IndexError):
+            return
+        
+        #Delete from data lists if index is valid
+        if 0 <= stageIndex < len(self.rotorVars):
+            del self.rotorVars[stageIndex]
+            del self.commonVars[stageIndex]
+            del self.statorVars[stageIndex]
+        
+        #Remove item from list widget
         for item in listItems:
-           self.listWidget.takeItem(self.listWidget.row(item))
+            self.listWidget.takeItem(self.listWidget.row(item))
                      
                      
     ################################
@@ -845,25 +859,46 @@ class Ui_MainWindow(object):
     #none
     ################################   
     def ListClicked(self, clicked):
+        #Check if we have any stages
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            return
+            
         #Making sure there's no overlap
-        if (self.clicked and (self.clicked < self.listWidget.count())): pass
-        else: self.clicked = 0
+        if (self.clicked and (self.clicked < self.listWidget.count())): 
+            pass
+        else: 
+            self.clicked = 0
         
-        #Set current value of qLineEdit to correspoinding dict value,
+        #Ensure clicked index is valid
+        if self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
+        #Set current value of qLineEdit to corresponding dict value,
         #of previously selected stage, if there is a value to change
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = self.MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
 
         #Set currently selected stage
-        self.clicked = int(clicked.text()[-1]) - 1
+        try:
+            self.clicked = int(clicked.text().split()[-1]) - 1
+        except (ValueError, IndexError):
+            self.clicked = 0
+        
+        #Ensure new clicked index is valid
+        if self.clicked >= len(self.commonVars):
+            self.clicked = 0
         
         #Set each value in list of current stage to their corresponding qLineEdit
         for dict in [self.commonVars, self.rotorVars, self.statorVars]:
             for obj in dict[self.clicked]:
-                    self.MainWindow.findChild(QLineEdit, obj).setText(str(dict[self.clicked][obj]))
+                widget = self.MainWindow.findChild(QLineEdit, obj)
+                if widget:
+                    widget.setText(str(dict[self.clicked][obj]))
 
 
     ################################
