@@ -132,3 +132,22 @@ Contact
 Want to yell at me? Or have a question, shoot me an email.
 
 
+
+Dark Mode
+"""""""""
+The application includes a dark mode theme for reduced eye strain.
+
+To toggle dark mode:
+
+1. Click **View** in the menu bar
+2. Check **Dark Mode**
+
+Or simply press the menu item to toggle between light and dark themes.
+
+The dark mode includes:
+
+- Dark background (#2b2b2b) with light text
+- Styled buttons, input fields, and list widgets
+- Theme-aware validation colors (green/yellow/red)
+- Consistent styling across all UI elements
+
