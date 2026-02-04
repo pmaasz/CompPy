@@ -791,18 +791,38 @@ class Ui_MainWindow(object):
     #none
     ################################       
     def SaveFile(self):
+        # Check if we have any stages to save
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            box = QMessageBox(self.MainWindow)
+            box.setText("No Stages to Save")
+            box.setInformativeText("Please add a stage first using 'Add Stage' button.")
+            box.setWindowTitle("Save Error")
+            box.exec_()
+            return
+        
+        # Ensure we have a valid clicked index
+        if self.clicked is None or self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
         #Open save file dialog window
         name = QFileDialog.getSaveFileName(self.MainWindow, "Save File", None, 'Json files (*.json)')
+        
+        # Check if user cancelled
+        if version == 5:
+            if not name[0]:
+                return
+            name = name[0]
+        elif not name:
+            return
         
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = self.MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
-        
-        #Version stuff
-        if version == 5: name = name[0]
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
         
         #Save dictionaries to .json file
         if not name.lower().endswith('.json'):
@@ -1016,15 +1036,33 @@ class Ui_MainWindow(object):
     def PlotProfile(self):
         from RClickWin import RenderSel, ErrorWindow
         
+        # Check if we have any stages
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            box = QMessageBox(self.MainWindow)
+            box.setText("No Stages Available")
+            box.setInformativeText("Please add a stage first using 'Add Stage' button.")
+            box.setWindowTitle("Plot Profile Error")
+            box.exec_()
+            return
+        
+        # Ensure we have a valid clicked index
+        if self.clicked is None or self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
         #Delete Currently Occupating Widget
-        for i in reversed(range(self.R_FrameLayout.count())): self.R_FrameLayout.itemAt(i).widget().setParent(None)
+        for i in reversed(range(self.R_FrameLayout.count())): 
+            widget = self.R_FrameLayout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
         
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = self.MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
         
         wind = RenderSel(self.MainWindow)
         wind.show()
@@ -1076,23 +1114,37 @@ class Ui_MainWindow(object):
     def Render(self):
         from RClickWin import RenderSel, ErrorWindow
         
+        # Check if we have any stages
+        if not self.commonVars or not self.rotorVars or not self.statorVars:
+            box = QMessageBox(self.MainWindow)
+            box.setText("No Stages Available")
+            box.setInformativeText("Please add a stage first using 'Add Stage' button.")
+            box.setWindowTitle("Render Error")
+            box.exec_()
+            return
+        
+        # Ensure we have a valid clicked index
+        if self.clicked is None or self.clicked >= len(self.commonVars):
+            self.clicked = 0
+        
         #Delete Currently Occupating Widget
-        for i in reversed(range(self.R_FrameLayout.count())): self.R_FrameLayout.itemAt(i).widget().setParent(None)
+        for i in reversed(range(self.R_FrameLayout.count())): 
+            widget = self.R_FrameLayout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
         
         #Make sure the current stage is saved to the dictionaries
         for dict in [self.commonVars[self.clicked], self.rotorVars[self.clicked], self.statorVars[self.clicked]]:
             for item in dict:
-                text = self.MainWindow.findChild(QLineEdit, item).text()
-                if text:
-                    dict[item] = text
-                    
-        #Display selction window
+                widget = self.MainWindow.findChild(QLineEdit, item)
+                if widget:
+                    text = widget.text()
+                    if text:
+                        dict[item] = text
+                     
+        #Display selection window
         wind = RenderSel(self.MainWindow)
         wind.show()
-        
-        #Make sure self.clicked has a value
-        if self.clicked: pass
-        else: self.clicked = 0
         
         #Once window is closed
         if wind.exec_():
