@@ -43,7 +43,7 @@ class RenderSel(QDialog):
 #Error Display Window
 ##Inputs: 
 #parent: parent obj
-#errors: (list)
+#errors: (list of tuples with field name and valid range)
 ##Returns:
 #None
 ################################         
@@ -59,11 +59,27 @@ class ErrorWindow(QDialog):
         layout.addWidget(title)
         
         for error in self.errors:
-            label = QLabel()
-            label.setText(error.title())
-            label.setStyleSheet("font: bold")
-            label.setAlignment(Qt.AlignCenter)
-            layout.addWidget(label)
+            # error can be either a string (old format) or tuple (new format with suggestion)
+            if isinstance(error, tuple):
+                field_name, suggestion = error
+                label = QLabel()
+                label.setText(f"{field_name.title()}")
+                label.setStyleSheet("font: bold")
+                label.setAlignment(Qt.AlignCenter)
+                layout.addWidget(label)
+                
+                suggestion_label = QLabel()
+                suggestion_label.setText(f"Valid range: {suggestion}")
+                suggestion_label.setStyleSheet("color: #0066cc; font-size: 10px;")
+                suggestion_label.setAlignment(Qt.AlignCenter)
+                layout.addWidget(suggestion_label)
+            else:
+                # Backward compatibility for old format
+                label = QLabel()
+                label.setText(error.title())
+                label.setStyleSheet("font: bold")
+                label.setAlignment(Qt.AlignCenter)
+                layout.addWidget(label)
 
         okButton = QPushButton('Gotcha')
         okButton.clicked.connect(self.close)

@@ -28,6 +28,37 @@ class Ui_MainWindow(object):
         self.rotorValidators = {"Y Twist (Rotor)" : None, "X Twist (Rotor)" : None, "Tip Chord (Rotor)" : None, "Rotor Diameter" : None, "Root Chord (Rotor)" : None, "Blade Thickness (Rotor)" : None, "Hub Diameter" : None, "Hub Length" : None, "Blade Clearance" : None, "Num of Blade (Rotor)" : None}
         self.statorValidators = {"Duct ID" : None, "Duct Length" : None, "Duct Thickness" : None, "Num of Blade (Stator)" : None, "Mount Can Length" : None, "Mount Can Dia" : None, "Mount Can Loc" : None, "Blade Thickness (Stator)" : None, "Root Chord (Stator)" : None, "Tip Chord (Stator)" : None, "X Twist (Stator)" : None, "Y Twist (Stator)" : None}
         
+        # Valid ranges for each field to provide helpful suggestions
+        self.validRanges = {
+            "RPM": "1 - 100,000",
+            "Loading (Psi)": "0.0 - 1.0",
+            "Flow (Phi)": "0.0 - 1.0",
+            "Reaction (R)": "0.0 - 1.0",
+            "Mean Line Radius": "0.0 - 1000.0 mm",
+            "Y Twist (Rotor)": "0.0 - 100.0 degrees",
+            "X Twist (Rotor)": "0.0 - 100.0 degrees",
+            "Tip Chord (Rotor)": "0.0 - 1000.0 mm",
+            "Rotor Diameter": "0.0 - 1000.0 mm",
+            "Root Chord (Rotor)": "0.0 - 1000.0 mm",
+            "Blade Thickness (Rotor)": "0.0 - 1000.0 mm",
+            "Hub Diameter": "0.0 - 10,000.0 mm",
+            "Hub Length": "0.0 - 1000.0 mm",
+            "Blade Clearance": "0.0 - 10.0 mm",
+            "Num of Blade (Rotor)": "1 - 1000",
+            "Duct ID": "0.0 - 1000.0 mm",
+            "Duct Length": "0.0 - 1000.0 mm",
+            "Duct Thickness": "0.0 - 100.0 mm",
+            "Num of Blade (Stator)": "1 - 1000",
+            "Mount Can Length": "0.0 - 1000.0 mm",
+            "Mount Can Dia": "0.0 - 1000.0 mm",
+            "Mount Can Loc": "0.0 - 1000.0 mm",
+            "Blade Thickness (Stator)": "0.0 - 100.0 mm",
+            "Root Chord (Stator)": "0.0 - 1000.0 mm",
+            "Tip Chord (Stator)": "0.0 - 1000.0 mm",
+            "X Twist (Stator)": "0.0 - 1000.0 degrees",
+            "Y Twist (Stator)": "0.0 - 1000.0 degrees"
+        }
+        
         self.exportObj = None
         self.clicked = None
         self.fileOpen = False
@@ -988,13 +1019,18 @@ class Ui_MainWindow(object):
                 dict[sender.objectName()] = state
             else: continue
             
-        #Set color of qLineEdit box (theme-aware)
+        #Set color of qLineEdit box (theme-aware) and tooltip
         if state == QValidator.Acceptable:
-            bgcolor = "#00cc44" if self.darkMode else "#009933" # green     
+            bgcolor = "#00cc44" if self.darkMode else "#009933" # green
+            sender.setToolTip("")  # Clear tooltip on valid input
         elif state == QValidator.Intermediate:
-            bgcolor = "#cccc00" if self.darkMode else "#ffff00" # yellow            
+            bgcolor = "#cccc00" if self.darkMode else "#ffff00" # yellow
+            valid_range = self.validRanges.get(sender.objectName(), "see documentation")
+            sender.setToolTip(f"Incomplete input. Valid range: {valid_range}")
         else:
             bgcolor = "#ff3333" if self.darkMode else "#ff0000" # red
+            valid_range = self.validRanges.get(sender.objectName(), "see documentation")
+            sender.setToolTip(f"Invalid input! Valid range: {valid_range}")
         
         # Always use black text on validation colors for readability
         sender.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
@@ -1016,12 +1052,15 @@ class Ui_MainWindow(object):
         else: to_check = [self.commonValidators, self.statorValidators]
         
         #Check all values in validators dict
-        #If one was ont acceptable, append it to failure list
+        #If one was not acceptable, append it to failure list with valid range suggestion
         for dict in to_check:
             if all(val == 2 for val in dict.values()): break
             else:
                 for item in dict:
-                    if dict[item] != 2: self.failed.append(item)
+                    if dict[item] != 2:
+                        # Add tuple with field name and valid range
+                        valid_range = self.validRanges.get(item, "see documentation")
+                        self.failed.append((item, valid_range))
                     else: pass
 
         
