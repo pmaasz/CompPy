@@ -970,13 +970,14 @@ class Ui_MainWindow(object):
             
         #Set color of qLineEdit box (theme-aware)
         if state == QValidator.Acceptable:
-            color = "#00cc44" if self.darkMode else "#009933" # green     
+            bgcolor = "#00cc44" if self.darkMode else "#009933" # green     
         elif state == QValidator.Intermediate:
-            color = "#cccc00" if self.darkMode else "#ffff00" # yellow            
+            bgcolor = "#cccc00" if self.darkMode else "#ffff00" # yellow            
         else:
-            color = "#ff3333" if self.darkMode else "#ff0000" # red
-            
-        sender.setStyleSheet("QLineEdit { background-color: %s }" % color)
+            bgcolor = "#ff3333" if self.darkMode else "#ff0000" # red
+        
+        # Always use black text on validation colors for readability
+        sender.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
     
         
     ################################
@@ -1166,8 +1167,8 @@ class Ui_MainWindow(object):
                     color: #e0e0e0;
                 }
                 QLineEdit {
-                    background-color: #404040;
-                    color: #e0e0e0;
+                    background-color: #ffffff;
+                    color: #000000;
                     border: 1px solid #555555;
                     padding: 2px;
                 }
@@ -1230,12 +1231,12 @@ class Ui_MainWindow(object):
                     widget = self.MainWindow.findChild(QLineEdit, name)
                     if widget:
                         if state == QValidator.Acceptable:
-                            color = "#009933" if not self.darkMode else "#00cc44"
+                            bgcolor = "#009933" if not self.darkMode else "#00cc44"
                         elif state == QValidator.Intermediate:
-                            color = "#ffff00" if not self.darkMode else "#cccc00"
+                            bgcolor = "#ffff00" if not self.darkMode else "#cccc00"
                         else:
-                            color = "#ff0000" if not self.darkMode else "#ff3333"
-                        widget.setStyleSheet("QLineEdit { background-color: %s }" % color)
+                            bgcolor = "#ff0000" if not self.darkMode else "#ff3333"
+                        widget.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
     
     
     ################################
