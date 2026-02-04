@@ -27,6 +27,20 @@ That's it! The application should now launch successfully.
 ### "Could not load Qt platform plugin xcb"
 Use the system PyQt5 as shown above (Quick Start method).
 
+### "QSocketNotifier: Can only be used with threads started with QThread"
+This is a harmless Qt warning that can be safely ignored. It doesn't affect functionality.
+
+To suppress it, you can run with:
+```bash
+python comppy.py 2>&1 | grep -v "QSocketNotifier"
+```
+
+Or set this environment variable:
+```bash
+export QT_LOGGING_RULES="*.debug=false;qt.qpa.*=false"
+python comppy.py
+```
+
 ### "NameError: name 'MainWindow' is not defined"
 This has been fixed in the latest version. Make sure you've pulled the latest changes.
 

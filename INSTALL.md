@@ -63,6 +63,13 @@ Or force X11 mode:
 QT_QPA_PLATFORM=xcb python comppy.py
 ```
 
+### "QSocketNotifier: Can only be used with threads started with QThread" warning
+
+This is a harmless Qt internal warning that doesn't affect functionality. You can:
+- Ignore it completely (recommended)
+- Suppress it with: `export QT_LOGGING_RULES="*.debug=false;qt.qpa.*=false"`
+- Filter stderr: `python comppy.py 2>&1 | grep -v "QSocketNotifier"`
+
 ### Missing OpenGL
 
 If you get OpenGL errors:
