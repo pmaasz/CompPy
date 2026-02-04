@@ -12,6 +12,10 @@ except ImportError:
 import BladePlot
 import RenderWindow
 from FileOps import *
+from UndoRedo import UndoRedoManager
+from Tooltips import get_tooltip, get_validation_message
+from Presets import get_preset_names, get_preset, get_preset_description
+from AssemblyViewer import AssemblyViewer
 
 
 class Ui_MainWindow(object):
@@ -64,6 +68,12 @@ class Ui_MainWindow(object):
         self.fileOpen = False
         self.failed = []
         self.darkMode = True
+        
+        # Initialize undo/redo manager
+        self.undo_manager = UndoRedoManager()
+        
+        # Track current values for undo
+        self.field_previous_values = {}
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         
@@ -92,7 +102,9 @@ class Ui_MainWindow(object):
         self.YT_Line.setAlignment(Qt.AlignCenter)
         self.YT_Line.setObjectName("Y Twist (Rotor)")
         self.YT_Line.setValidator(QDoubleValidator(0.0, 100.0, 3, self.YT_Line))
+        self.YT_Line.setToolTip(get_tooltip("Y Twist (Rotor)"))
         self.YT_Line.textChanged.connect(self.CheckState)
+        self.YT_Line.textChanged.connect(self.TrackUndo)
         self.YT_Line.textChanged.emit(self.YT_Line.text())
         
         self.gridLayout_2.addWidget(self.YT_Line, 11, 3, 1, 1)
@@ -686,6 +698,35 @@ class Ui_MainWindow(object):
         self.actionSave.setStatusTip("Save File")
         self.actionSave.triggered.connect(self.SaveFile)
         
+        # Undo/Redo actions
+        self.actionUndo = QAction(MainWindow)
+        self.actionUndo.setObjectName("actionUndo")
+        self.actionUndo.setShortcut("Ctrl+Z")
+        self.actionUndo.setStatusTip("Undo")
+        self.actionUndo.triggered.connect(self.Undo)
+        self.actionUndo.setEnabled(False)
+        
+        self.actionRedo = QAction(MainWindow)
+        self.actionRedo.setObjectName("actionRedo")
+        self.actionRedo.setShortcut("Ctrl+Y")
+        self.actionRedo.setStatusTip("Redo")
+        self.actionRedo.triggered.connect(self.Redo)
+        self.actionRedo.setEnabled(False)
+        
+        # Presets menu
+        self.menuPresets = QMenu(self.menubar)
+        self.menuPresets.setObjectName("menuPresets")
+        
+        # Tools menu
+        self.menuTools = QMenu(self.menubar)
+        self.menuTools.setObjectName("menuTools")
+        
+        # Assembly viewer action
+        self.actionAssemblyView = QAction(MainWindow)
+        self.actionAssemblyView.setObjectName("actionAssemblyView")
+        self.actionAssemblyView.setStatusTip("View All Stages Together")
+        self.actionAssemblyView.triggered.connect(self.ShowAssemblyView)
+        
         self.actionToggleDarkMode = QAction(MainWindow)
         self.actionToggleDarkMode.setObjectName("actionToggleDarkMode")
         self.actionToggleDarkMode.setCheckable(True)
@@ -695,8 +736,22 @@ class Ui_MainWindow(object):
 
         self.menuFile.addAction(self.actionOpen)
         self.menuFile.addAction(self.actionSave)
+        self.menuFile.addSeparator()
+        self.menuFile.addAction(self.actionUndo)
+        self.menuFile.addAction(self.actionRedo)
+        
+        # Add preset actions dynamically
+        for preset_name in get_preset_names():
+            action = QAction(preset_name, MainWindow)
+            action.setStatusTip(get_preset_description(preset_name))
+            action.triggered.connect(lambda checked, name=preset_name: self.LoadPreset(name))
+            self.menuPresets.addAction(action)
+        
+        self.menuTools.addAction(self.actionAssemblyView)
         self.menuView.addAction(self.actionToggleDarkMode)
         self.menubar.addAction(self.menuFile.menuAction())
+        self.menubar.addAction(self.menuPresets.menuAction())
+        self.menubar.addAction(self.menuTools.menuAction())
         self.menubar.addAction(self.menuView.menuAction())
 
         #Set Tab Order
@@ -728,6 +783,13 @@ class Ui_MainWindow(object):
         MainWindow.setTabOrder(self.XT_Line_2, self.YT_Line_2)
         
         self.retranslateUi(MainWindow)
+        
+        # Add tooltips to all input fields
+        self.AddTooltips()
+        
+        # Enable drag and drop for stage list
+        self.listWidget.setDragDropMode(QAbstractItemView.InternalMove)
+        
         QMetaObject.connectSlotsByName(MainWindow)
 
 
@@ -779,9 +841,14 @@ class Ui_MainWindow(object):
         self.XT_Label_2.setText("Center of X Twist")
         self.YT_Label_2.setText("Center of Y Twist")
         self.menuFile.setTitle("File")
+        self.menuPresets.setTitle("Presets")
+        self.menuTools.setTitle("Tools")
         self.menuView.setTitle("View")
         self.actionOpen.setText("Open")
         self.actionSave.setText("Save")
+        self.actionUndo.setText("Undo")
+        self.actionRedo.setText("Redo")
+        self.actionAssemblyView.setText("Assembly Viewer")
         self.actionToggleDarkMode.setText("Dark Mode")
         
         # Apply dark mode theme on startup
@@ -1103,23 +1170,26 @@ class Ui_MainWindow(object):
             if sender.objectName() in dict:
                 dict[sender.objectName()] = state
             else: continue
-            
-        #Set color of qLineEdit box (theme-aware) and tooltip
+        
+        field_name = sender.objectName()
+        base_tooltip = get_tooltip(field_name)
+        
+        #Set color of qLineEdit box (theme-aware) and tooltip with validation feedback
         if state == QValidator.Acceptable:
             bgcolor = "#00cc44" if self.darkMode else "#009933" # green
-            sender.setToolTip("")  # Clear tooltip on valid input
+            sender.setToolTip(base_tooltip)  # Show normal tooltip
         elif state == QValidator.Intermediate:
             bgcolor = "#cccc00" if self.darkMode else "#ffff00" # yellow
-            valid_range = self.validRanges.get(sender.objectName(), "see documentation")
-            sender.setToolTip(f"Incomplete input. Valid range: {valid_range}")
+            valid_range = self.validRanges.get(field_name, "see documentation")
+            hint = f"{base_tooltip}\n\n⚠ Value incomplete or out of range\nValid: {valid_range}"
+            sender.setToolTip(hint)
         else:
             bgcolor = "#ff3333" if self.darkMode else "#ff0000" # red
-            valid_range = self.validRanges.get(sender.objectName(), "see documentation")
-            sender.setToolTip(f"Invalid input! Valid range: {valid_range}")
-        
-        # Always use black text on validation colors for readability
+            valid_range = self.validRanges.get(field_name, "see documentation")
+            error_msg = f"{base_tooltip}\n\n❌ Invalid value!\nValid: {valid_range}"
+            sender.setToolTip(error_msg)
+            
         sender.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
-    
         
     ################################
     ##Function: CheckAllStates
@@ -1413,6 +1483,235 @@ class Ui_MainWindow(object):
                         else:
                             bgcolor = "#ff0000" if not self.darkMode else "#ff3333"
                         widget.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
+    
+    ################################
+    ##Function: AddTooltips
+    #Add tooltips to all input fields
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def AddTooltips(self):
+        """Add tooltips to all input fields and connect undo tracking"""
+        all_fields = list(self.commonValidators.keys()) + \
+                     list(self.rotorValidators.keys()) + \
+                     list(self.statorValidators.keys())
+        
+        for field_name in all_fields:
+            widget = self.MainWindow.findChild(QLineEdit, field_name)
+            if widget:
+                # Add tooltip
+                tooltip = get_tooltip(field_name)
+                if tooltip:
+                    widget.setToolTip(tooltip)
+                
+                # Connect undo tracking (if not already connected)
+                try:
+                    widget.textChanged.connect(self.TrackUndo)
+                except:
+                    pass  # Already connected
+                
+                # Initialize field previous values
+                self.field_previous_values[field_name] = widget.text()
+    
+    ################################
+    ##Function: TrackUndo
+    #Track changes for undo/redo functionality
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def TrackUndo(self):
+        """Track field changes for undo"""
+        sender = self.MainWindow.sender()
+        if not sender or not isinstance(sender, QLineEdit):
+            return
+            
+        field_name = sender.objectName()
+        if not field_name:
+            return
+            
+        new_value = sender.text()
+        
+        # Get previous value
+        old_value = self.field_previous_values.get(field_name, "")
+        
+        # Only track if value actually changed
+        if old_value != new_value and old_value != "":
+            state = {
+                'stage_idx': self.clicked if self.clicked is not None else 0,
+                'field_name': field_name,
+                'old_value': old_value,
+                'new_value': new_value
+            }
+            self.undo_manager.push_state(state)
+            
+            # Update undo/redo button states
+            self.actionUndo.setEnabled(self.undo_manager.can_undo())
+            self.actionRedo.setEnabled(self.undo_manager.can_redo())
+        
+        # Store current value as previous
+        self.field_previous_values[field_name] = new_value
+    
+    ################################
+    ##Function: Undo
+    #Undo last change
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def Undo(self):
+        """Undo last parameter change"""
+        state = self.undo_manager.undo()
+        if state:
+            # Restore old value
+            widget = self.MainWindow.findChild(QLineEdit, state['field_name'])
+            if widget:
+                # Temporarily disconnect to avoid creating new undo state
+                widget.textChanged.disconnect(self.TrackUndo)
+                widget.setText(state['old_value'])
+                widget.textChanged.connect(self.TrackUndo)
+                self.field_previous_values[state['field_name']] = state['old_value']
+            
+            # Update button states
+            self.actionUndo.setEnabled(self.undo_manager.can_undo())
+            self.actionRedo.setEnabled(self.undo_manager.can_redo())
+    
+    ################################
+    ##Function: Redo
+    #Redo last undone change
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def Redo(self):
+        """Redo last undone change"""
+        state = self.undo_manager.redo()
+        if state:
+            # Restore new value
+            widget = self.MainWindow.findChild(QLineEdit, state['field_name'])
+            if widget:
+                # Temporarily disconnect to avoid creating new undo state
+                widget.textChanged.disconnect(self.TrackUndo)
+                widget.setText(state['new_value'])
+                widget.textChanged.connect(self.TrackUndo)
+                self.field_previous_values[state['field_name']] = state['new_value']
+            
+            # Update button states
+            self.actionUndo.setEnabled(self.undo_manager.can_undo())
+            self.actionRedo.setEnabled(self.undo_manager.can_redo())
+    
+    ################################
+    ##Function: LoadPreset
+    #Load a preset configuration
+    ##Inputs: 
+    #self: Ui_MainWindow
+    #preset_name: name of preset to load
+    ##Returns:
+    #none
+    ################################
+    def LoadPreset(self, preset_name):
+        """Load a preset configuration"""
+        preset = get_preset(preset_name)
+        if not preset:
+            return
+        
+        # Ask user for confirmation
+        reply = QMessageBox.question(
+            self.MainWindow,
+            'Load Preset',
+            f'Load preset "{preset_name}"?\n\n{get_preset_description(preset_name)}\n\nThis will replace current stage values.',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        # Ensure we have at least one stage
+        if not self.commonVars:
+            self.AddStage()
+        
+        # Get current stage index
+        stage_idx = self.clicked if self.clicked is not None else 0
+        
+        # Load preset values into current stage
+        if 'Stage' in preset:
+            for field_name, value in preset['Stage'].items():
+                self.commonVars[stage_idx][field_name] = value
+                widget = self.MainWindow.findChild(QLineEdit, field_name)
+                if widget:
+                    widget.setText(value)
+        
+        if 'Rotor' in preset:
+            for field_name, value in preset['Rotor'].items():
+                self.rotorVars[stage_idx][field_name] = value
+                widget = self.MainWindow.findChild(QLineEdit, field_name)
+                if widget:
+                    widget.setText(value)
+        
+        if 'Stator' in preset:
+            for field_name, value in preset['Stator'].items():
+                self.statorVars[stage_idx][field_name] = value
+                widget = self.MainWindow.findChild(QLineEdit, field_name)
+                if widget:
+                    widget.setText(value)
+        
+        # Clear undo history after loading preset
+        self.undo_manager.clear()
+        self.actionUndo.setEnabled(False)
+        self.actionRedo.setEnabled(False)
+    
+    ################################
+    ##Function: ShowAssemblyView
+    #Show 3D assembly viewer with all stages
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def ShowAssemblyView(self):
+        """Show assembly viewer with all stages"""
+        if not self.commonVars or len(self.commonVars) == 0:
+            QMessageBox.warning(
+                self.MainWindow,
+                "No Stages",
+                "Please add at least one stage before viewing assembly."
+            )
+            return
+        
+        # Prepare stages data
+        stages_data = []
+        for i in range(len(self.commonVars)):
+            stages_data.append({
+                'common': self.commonVars[i],
+                'rotor': self.rotorVars[i],
+                'stator': self.statorVars[i],
+                'stage_num': i + 1
+            })
+        
+        # Create and show assembly viewer window
+        try:
+            self.assembly_window = QDialog(self.MainWindow)
+            self.assembly_window.setWindowTitle("Assembly Viewer")
+            self.assembly_window.resize(1000, 800)
+            
+            layout = QVBoxLayout()
+            viewer = AssemblyViewer(self.assembly_window, stages_data)
+            layout.addWidget(viewer)
+            
+            self.assembly_window.setLayout(layout)
+            self.assembly_window.show()
+        except Exception as e:
+            QMessageBox.critical(
+                self.MainWindow,
+                "Assembly Viewer Error",
+                f"Could not create assembly viewer:\n{str(e)}"
+            )
     
     
     ################################
