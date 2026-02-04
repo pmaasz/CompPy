@@ -141,8 +141,11 @@ class RenderRotor(QWidget):
         from matplotlib import pyplot
         from mpl_toolkits import mplot3d
 
+        # Clear the figure first
+        self.figure.clear()
+        
         # Create a new plot
-        axes = mplot3d.Axes3D(self.figure)
+        axes = self.figure.add_subplot(111, projection='3d')
 
         # Render the Rotor
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(self.rotorHub.vectors))
@@ -157,8 +160,10 @@ class RenderRotor(QWidget):
         axes.set_xticklabels([])
         axes.set_yticklabels([])
         axes.set_zticklabels([])
-        #pyplot.show()
+        
+        # Force canvas update
         self.canvas.draw()
+        self.canvas.flush_events()
         
         
     def getObj(self):
@@ -285,10 +290,13 @@ class RenderStator(QWidget):
         from matplotlib import pyplot
         from mpl_toolkits import mplot3d
 
+        # Clear the figure first
+        self.figure.clear()
+        
         # Create a new plot
-        axes = mplot3d.Axes3D(self.figure)
+        axes = self.figure.add_subplot(111, projection='3d')
 
-        # Render the Rotor
+        # Render the Stator
         axes.add_collection3d(mplot3d.art3d.Poly3DCollection(self.mountCan.vectors))
 
         # Auto scale to the mesh size
@@ -301,8 +309,10 @@ class RenderStator(QWidget):
         axes.set_xticklabels([])
         axes.set_yticklabels([])
         axes.set_zticklabels([])
-        #pyplot.show()
+        
+        # Force canvas update
         self.canvas.draw()
+        self.canvas.flush_events()
         
         
     def getObj(self):
