@@ -51,6 +51,10 @@ Installation
 
 4. Run the application::
 
+    python comppy.py
+
+   Or directly::
+
     python src/MainWindow.py
 
 Testing
