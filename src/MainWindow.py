@@ -1,17 +1,13 @@
-try:
-    from PyQt4.QtCore import *
-    from PyQt4.QtGui import *
-    version = 4
+import os
 
-except ImportError:
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import *
-    from PyQt5.QtGui import *
-    version = 5
+from PyQt5.QtCore import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
+version = 5
 
 import BladePlot
 import RenderWindow
-from FileOps import *
+from FileOps import StageOpen, StageSave
 from UndoRedo import UndoRedoManager
 from Tooltips import get_tooltip, get_validation_message
 from Presets import get_preset_names, get_preset, get_preset_description
@@ -1056,30 +1052,27 @@ class Ui_MainWindow(object):
     #none
     ################################   
     def RemoveStage(self):
-        #Check if anything is selected
-        listItems = self.listWidget.selectedItems()
-        if not listItems:
+        # Use row position as the stage index (robust to renames/reordering).
+        row = self.listWidget.currentRow()
+        if row < 0 or row >= len(self.rotorVars):
             return
-        
-        currentItem = self.listWidget.currentItem()
-        if not currentItem:
-            return
-            
-        #Get the index from the stage name (e.g., "Stage 1" -> index 0)
-        try:
-            stageIndex = int(currentItem.text().split()[-1]) - 1
-        except (ValueError, IndexError):
-            return
-        
-        #Delete from data lists if index is valid
-        if 0 <= stageIndex < len(self.rotorVars):
-            del self.rotorVars[stageIndex]
-            del self.commonVars[stageIndex]
-            del self.statorVars[stageIndex]
-        
-        #Remove item from list widget
-        for item in listItems:
-            self.listWidget.takeItem(self.listWidget.row(item))
+
+        del self.rotorVars[row]
+        del self.commonVars[row]
+        del self.statorVars[row]
+
+        self.listWidget.takeItem(row)
+
+        # Renumber so list labels always match data positions.
+        for i in range(self.listWidget.count()):
+            self.listWidget.item(i).setText("Stage {}".format(i + 1))
+
+        # Keep selection valid.
+        if self.listWidget.count():
+            self.clicked = min(row, self.listWidget.count() - 1)
+            self.listWidget.setCurrentRow(self.clicked)
+        else:
+            self.clicked = None
                      
                      
     ################################
@@ -1124,11 +1117,9 @@ class Ui_MainWindow(object):
         #Check if we have any stages
         if not self.commonVars or not self.rotorVars or not self.statorVars:
             return
-            
-        #Making sure there's no overlap
-        if (self.clicked and (self.clicked < self.listWidget.count())): 
-            pass
-        else: 
+
+        #Making sure there's no overlap (clicked==0 is valid; do not use truthiness)
+        if not (self.clicked is not None and 0 <= self.clicked < self.listWidget.count()):
             self.clicked = 0
         
         #Ensure clicked index is valid
@@ -1231,7 +1222,12 @@ class Ui_MainWindow(object):
     ################################       
     def CheckState(self):
         sender = self.MainWindow.sender()
-        state = sender.validator().validate(sender.text(), 0)[0]
+        if sender is None or not isinstance(sender, QLineEdit):
+            return
+        validator = sender.validator()
+        if validator is None:
+            return
+        state = validator.validate(sender.text(), 0)[0]
         
         #Check every line
         for dict in [self.commonValidators, self.rotorValidators, self.statorValidators]:
@@ -1270,21 +1266,20 @@ class Ui_MainWindow(object):
     #none
     ################################   
     def CheckAllStates(self, obj):
-    
+
         if obj == "R": to_check = [self.commonValidators, self.rotorValidators]
         else: to_check = [self.commonValidators, self.statorValidators]
-        
+
         #Check all values in validators dict
         #If one was not acceptable, append it to failure list with valid range suggestion
         for dict in to_check:
-            if all(val == 2 for val in dict.values()): break
-            else:
-                for item in dict:
-                    if dict[item] != 2:
-                        # Add tuple with field name and valid range
-                        valid_range = self.validRanges.get(item, "see documentation")
-                        self.failed.append((item, valid_range))
-                    else: pass
+            if all(val == QValidator.Acceptable for val in dict.values()):
+                continue
+            for item in dict:
+                if dict[item] != QValidator.Acceptable:
+                    # Add tuple with field name and valid range
+                    valid_range = self.validRanges.get(item, "see documentation")
+                    self.failed.append((item, valid_range))
 
         
     ################################
