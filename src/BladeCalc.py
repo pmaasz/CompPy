@@ -244,6 +244,25 @@ def CalcStageBladeAngles(r, phi, psi, rpm, radius):
     return stageProps
 
 
+def camber_from_turning(chord, delta_beta):
+    """Camber ratio needed to achieve a given flow turning angle.
+
+    Centralizes the formula previously copy-pasted in BladeRender and
+    BladePlot. Guards the sin/tan singularity when turning -> 0.
+    """
+    import numpy as np
+    if chord <= 0:
+        raise ValueError("chord must be > 0")
+    if abs(float(delta_beta)) < 1e-9:
+        return 0.0
+    s = float(np.sin(delta_beta))
+    t = float(np.tan(delta_beta))
+    if abs(s) < 1e-12 or abs(t) < 1e-12:
+        return 0.0
+    camber = (chord / 2 / s - chord / 2 / t) / chord
+    return -1.0 * camber
+
+
 def _match_cx(r, psi, rpm, radius, target_cx, phi_guess, max_iter=100, tol=1e-3):
     """Bisect local flow coefficient so local cx matches target cx.
 

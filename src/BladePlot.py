@@ -1,19 +1,13 @@
-try:
-    from PyQt4.QtGui import *
-    from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-    import matplotlib.pyplot as plt
-    
-except ImportError:
-    import matplotlib
-    matplotlib.use("Qt5Agg")
-    import matplotlib.pyplot as plt
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QSizePolicy, QMessageBox, QWidget
-    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-    from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
+from PyQt5.QtCore import *
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QSizePolicy, QMessageBox, QWidget
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
-from BladeCalc import *
+from BladeCalc import StageCalc, camber_from_turning
 import numpy as np
+
+CAMBER_POS = 0.35
 
 
 ################################
@@ -57,17 +51,15 @@ class NACA4Profile(QWidget):
                                                     tipRadius = self.stageVars['Rotor Diameter'] / 2)
             #Rotor Root Properties
             rotorRoot = self.stageProps.rootProps
-            avgBetaRoot = (rotorRoot.beta2 + rotorRoot.beta1) / 2
             deltaBetaRoot = rotorRoot.beta2 - rotorRoot.beta1
-            self.rootCamber = (self.stageVars['Root Chord (Rotor)'] / 2 / np.sin(deltaBetaRoot) - self.stageVars['Root Chord (Rotor)'] / 2 / np.tan(deltaBetaRoot)) / self.stageVars['Root Chord (Rotor)']
-            self.rootCamber *= -1
+            self.rootCamber = camber_from_turning(
+                self.stageVars['Root Chord (Rotor)'], deltaBetaRoot)
 
             #Rotor Tip Properties
             rotorTip = self.stageProps.tipProps
-            avgBetaTip = (rotorTip.beta2 + rotorTip.beta1) / 2
             deltaBetaTip = rotorTip.beta2 - rotorTip.beta1
-            self.tipCamber = (self.stageVars['Tip Chord (Rotor)'] /2 / np.sin(deltaBetaTip) - self.stageVars['Tip Chord (Rotor)'] / 2 / np.tan(deltaBetaTip)) / self.stageVars['Tip Chord (Rotor)']
-            self.tipCamber *= -1
+            self.tipCamber = camber_from_turning(
+                self.stageVars['Tip Chord (Rotor)'], deltaBetaTip)
             
         else:
             #Create Stator Object
@@ -80,17 +72,15 @@ class NACA4Profile(QWidget):
                                                     tipRadius = self.stageVars['Duct ID'] / 2)
             #Stator Root Properties
             rotorRoot = self.stageProps.rootProps
-            avgBetaRoot = (rotorRoot.beta2 + rotorRoot.beta1) / 2
             deltaBetaRoot = rotorRoot.beta2 - rotorRoot.beta1
-            self.rootCamber = (self.stageVars['Root Chord (Stator)'] / 2 / np.sin(deltaBetaRoot) - self.stageVars['Root Chord (Stator)'] / 2 / np.tan(deltaBetaRoot)) / self.stageVars['Root Chord (Stator)']
-            self.rootCamber *= -1
+            self.rootCamber = camber_from_turning(
+                self.stageVars['Root Chord (Stator)'], deltaBetaRoot)
 
             #Stator Tip Properties
             rotorTip = self.stageProps.tipProps
-            avgBetaTip = (rotorTip.beta2 + rotorTip.beta1) / 2
             deltaBetaTip = rotorTip.beta2 - rotorTip.beta1
-            self.tipCamber = (self.stageVars['Tip Chord (Stator)'] /2 / np.sin(deltaBetaTip) - self.stageVars['Tip Chord (Stator)'] / 2 / np.tan(deltaBetaTip)) / self.stageVars['Tip Chord (Stator)']
-            self.tipCamber *= -1
+            self.tipCamber = camber_from_turning(
+                self.stageVars['Tip Chord (Stator)'], deltaBetaTip)
             
         
     def _camberLine(self, camber, chord, thickness, cpos):
@@ -124,32 +114,32 @@ class NACA4Profile(QWidget):
         axTip.set_title('Tip Profile')
         
         #Root Blade Shape
-        root = self._compute(camber = self.rootCamber, 
+        root = self._compute(camber = self.rootCamber,
                                       chord = 1,
                                       thickness = self.stageVars['Blade Thickness ({})'.format(self.stageObj)] / 100,
-                                      cpos = 0.35) #Can Be Changed
-                                      
+                                      cpos = CAMBER_POS)
+
         #Tip Blade Shape
-        tip = self._compute(camber = self.tipCamber, 
+        tip = self._compute(camber = self.tipCamber,
                                    chord = 1,
                                    thickness = self.stageVars['Blade Thickness ({})'.format(self.stageObj)] / 100,
-                                   cpos = 0.35) #Can Be Changed
-                                      
+                                   cpos = CAMBER_POS)
+
         for item in root:
             axRoot.plot(item[0], item[1], 'b')
         for item in tip:
             axTip.plot(item[0], item[1], 'b')
-        
+
         #Root Camber
-        rootCL = self._camberLine(camber = self.rootCamber, 
+        rootCL = self._camberLine(camber = self.rootCamber,
                                               chord = 1,
                                               thickness = self.stageVars['Blade Thickness ({})'.format(self.stageObj)] / 100,
-                                              cpos = 0.35) #Can Be Changed
-        #Tip Camber                                     
-        tipCL = self._camberLine(camber = self.tipCamber, 
+                                              cpos = CAMBER_POS)
+        #Tip Camber
+        tipCL = self._camberLine(camber = self.tipCamber,
                                             chord = 1,
                                             thickness = self.stageVars['Blade Thickness ({})'.format(self.stageObj)] / 100,
-                                            cpos = 0.35) #Can Be Changed   
+                                            cpos = CAMBER_POS)
                                               
         axRoot.plot(self.x, rootCL, 'r')
         axRoot.axis('equal')

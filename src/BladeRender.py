@@ -1,21 +1,23 @@
-try:
-    from PyQt4.QtGui import *
-    from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-    import matplotlib.pyplot as plt
-    from matplotlib.figure import Figure
-    
-except ImportError:
-    import matplotlib
-    matplotlib.use("Qt5Agg")
-    import matplotlib.pyplot as plt
-    from PyQt5.QtCore import *
-    from PyQt5.QtWidgets import *
-    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-    from matplotlib.figure import Figure
+import matplotlib
+# Backend is selected by the Qt binding in use; comppy.py sets QT_API.
+# Do not call matplotlib.use() on import (was a global side effect).
+import matplotlib.pyplot as plt
+from PyQt5.QtCore import *
+from PyQt5.QtWidgets import *
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
-from BladeCalc import *
-from StlUtils import *
+from BladeCalc import StageCalc, FindBounds, camber_from_turning
+from StlUtils import drawBlade, drawCylinder, drawDuct
+from stl import mesh
 import numpy as np
+
+# NACA 4-digit max-camber position (fraction of chord). Was a bare
+# magic 0.35 in four places; single source of truth now.
+CAMBER_POS = 0.35
+# Blade is generated longer than the exposed height so the root stays
+# buried in the hub. Replaces magic 1.7 divisor.
+BLADE_EMBED_FACTOR = 1.7
 
 
 ################################
@@ -62,15 +64,15 @@ class RenderRotor(QWidget):
         rotorRoot = self.stageProps.rootProps
         avgBetaRoot = (rotorRoot.beta2 + rotorRoot.beta1) / 2
         deltaBetaRoot = rotorRoot.beta2 - rotorRoot.beta1
-        rootCamber = (self.rotorVars['Root Chord (Rotor)'] /2 / np.sin(deltaBetaRoot) - self.rotorVars['Root Chord (Rotor)'] / 2 / np.tan(deltaBetaRoot)) / self.rotorVars['Root Chord (Rotor)']
-        rootCamber *= -1
-        
+        rootCamber = camber_from_turning(
+            self.rotorVars['Root Chord (Rotor)'], deltaBetaRoot)
+
         #Rotor Tip Properties
         rotorTip = self.stageProps.tipProps
         avgBetaTip = (rotorTip.beta2 + rotorTip.beta1) / 2
         deltaBetaTip = rotorTip.beta2 - rotorTip.beta1
-        tipCamber = (self.rotorVars['Tip Chord (Rotor)'] /2 / np.sin(deltaBetaTip) - self.rotorVars['Tip Chord (Rotor)'] / 2 / np.tan(deltaBetaTip)) / self.rotorVars['Tip Chord (Rotor)']
-        tipCamber *= -1
+        tipCamber = camber_from_turning(
+            self.rotorVars['Tip Chord (Rotor)'], deltaBetaTip)
         
         #Draw Hub Cylinder
         self.rotorHub = drawCylinder(dia = self.rotorVars['Hub Diameter'],
@@ -89,35 +91,40 @@ class RenderRotor(QWidget):
         #It's the blade height that's exposed
         relativeBladeHeight = (self.rotorVars['Rotor Diameter'] / 2 - self.rotorVars['Hub Diameter'] / 2)
         #Actual height is the actual length of the blade that is created, not all is exposed
-        actualBladeHeight = (self.rotorVars['Rotor Diameter'] / 1.7 - self.rotorVars['Hub Diameter'] / 2) / np.cos(np.deg2rad(rootAngle))
-        
-        #Generate Blades
-        self.blades = []
-        for i in range(int(self.rotorVars['Num of Blade (Rotor)'])):
-            blade = drawBlade(camberRoot = rootCamber, 
-                                    camberTip = tipCamber, 
-                                    camberPos = 0.35, #Can Be Changed
-                                    thickness = self.rotorVars['Blade Thickness (Rotor)'] / 100, 
-                                    bladeHeight = actualBladeHeight, 
-                                    twistAngle = np.rad2deg(avgBetaRoot - avgBetaTip), 
-                                    rootChord = self.rotorVars['Root Chord (Rotor)'], 
-                                    tipChord = self.rotorVars['Tip Chord (Rotor)'], 
-                                    cot = [self.rotorVars['X Twist (Rotor)'], self.rotorVars['Y Twist (Rotor)']])
+        cos_root = np.cos(np.deg2rad(rootAngle))
+        if abs(cos_root) < 1e-6:
+            raise ValueError("root stagger angle near 90 deg; blade height undefined")
+        actualBladeHeight = (self.rotorVars['Rotor Diameter'] / BLADE_EMBED_FACTOR - self.rotorVars['Hub Diameter'] / 2) / cos_root
 
-            #Not used, but just in case, the rotation matrix
-            #R = rotationMatrix((0, 0, 1), np.deg2rad(rootAngle))
+        #Generate Blades
+        num_blades = int(self.rotorVars['Num of Blade (Rotor)'])
+        if num_blades < 1:
+            raise ValueError("Num of Blade (Rotor) must be >= 1")
+        self.blades = []
+        for i in range(num_blades):
+            blade = drawBlade(camberRoot = rootCamber,
+                                    camberTip = tipCamber,
+                                    camberPos = CAMBER_POS,
+                                    thickness = self.rotorVars['Blade Thickness (Rotor)'] / 100,
+                                    bladeHeight = actualBladeHeight,
+                                    twistAngle = np.rad2deg(avgBetaRoot - avgBetaTip),
+                                    rootChord = self.rotorVars['Root Chord (Rotor)'],
+                                    tipChord = self.rotorVars['Tip Chord (Rotor)'],
+                                    cot = [self.rotorVars['X Twist (Rotor)'], self.rotorVars['Y Twist (Rotor)']])
 
             #Rotate, Move, and Rotate the Blade
             blade.rotate([0, 0, 1], np.deg2rad(-rootAngle))
             blade.y += (((hmaxx - hminx)) / 2) - (relativeBladeHeight / 2)
             blade.z += (((hmaxy - hminy)) / 2) - (relativeBladeHeight / 2)
-            blade.rotate([1, 0, 0], np.deg2rad(rootAngle + ((360 / 10) * i)))
-            
+            blade.rotate([1, 0, 0], np.deg2rad(rootAngle + ((360.0 / num_blades) * i)))
+
             self.blades.append(blade)       
         
-        #Create a Combined Mesh of All Objects
-        for blade in self.blades:
-            self.rotorHub = mesh.Mesh(np.concatenate([self.rotorHub.data, blade.data]))
+        #Create a Combined Mesh of All Objects in a single concat
+        # (was O(n^2) per-blade reallocation).
+        if self.blades:
+            self.rotorHub = mesh.Mesh(np.concatenate(
+                [self.rotorHub.data] + [b.data for b in self.blades]))
         
         #If End Wall Was Checked
         if self.endWall:
@@ -210,15 +217,15 @@ class RenderStator(QWidget):
         rotorRoot = self.stageProps.rootProps
         avgBetaRoot = (rotorRoot.beta2 + rotorRoot.beta1) / 2
         deltaBetaRoot = rotorRoot.beta2 - rotorRoot.beta1
-        rootCamber = (self.statorVars['Root Chord (Stator)'] /2 / np.sin(deltaBetaRoot) - self.statorVars['Root Chord (Stator)'] / 2 / np.tan(deltaBetaRoot)) / self.statorVars['Root Chord (Stator)']
-        rootCamber *= -1
-        
+        rootCamber = camber_from_turning(
+            self.statorVars['Root Chord (Stator)'], deltaBetaRoot)
+
         #Stator Tip Properties
         rotorTip = self.stageProps.tipProps
         avgBetaTip = (rotorTip.beta2 + rotorTip.beta1) / 2
         deltaBetaTip = rotorTip.beta2 - rotorTip.beta1
-        tipCamber = (self.statorVars['Tip Chord (Stator)'] /2 / np.sin(deltaBetaTip) - self.statorVars['Tip Chord (Stator)'] / 2 / np.tan(deltaBetaTip)) / self.statorVars['Tip Chord (Stator)']
-        tipCamber *= -1
+        tipCamber = camber_from_turning(
+            self.statorVars['Tip Chord (Stator)'], deltaBetaTip)
             
         #Draw Hub Cylinder
         self.mountCan = drawCylinder(dia = self.statorVars['Mount Can Dia'],
@@ -247,40 +254,40 @@ class RenderStator(QWidget):
         #It's the blade height that's exposed
         relativeBladeHeight = (self.statorVars['Duct ID'] / 2 - self.statorVars['Mount Can Dia'] / 2)
         #Actual height is the actual length of the blade that is created, not all is exposed
-        actualBladeHeight = (self.statorVars['Duct ID'] / 1.7 - self.statorVars['Mount Can Dia'] / 2) / np.cos(np.deg2rad(rootAngle))
-        
+        cos_root = np.cos(np.deg2rad(rootAngle))
+        if abs(cos_root) < 1e-6:
+            raise ValueError("root stagger angle near 90 deg; blade height undefined")
+        actualBladeHeight = (self.statorVars['Duct ID'] / BLADE_EMBED_FACTOR - self.statorVars['Mount Can Dia'] / 2) / cos_root
+
         #Generate Blades
+        num_blades = int(self.statorVars['Num of Blade (Stator)'])
+        if num_blades < 1:
+            raise ValueError("Num of Blade (Stator) must be >= 1")
         blades = []
-        for i in range(int(self.statorVars['Num of Blade (Stator)'])):
-            blade = drawBlade(camberRoot = rootCamber, 
-                                    camberTip = tipCamber, 
-                                    camberPos = .35, #Can Be Changed
-                                    thickness = self.statorVars['Blade Thickness (Stator)'] / 100, 
-                                    bladeHeight = actualBladeHeight, 
-                                    twistAngle = np.rad2deg(avgBetaRoot - avgBetaTip), 
-                                    rootChord = self.statorVars['Root Chord (Stator)'], 
-                                    tipChord = self.statorVars['Tip Chord (Stator)'], 
+        for i in range(num_blades):
+            blade = drawBlade(camberRoot = rootCamber,
+                                    camberTip = tipCamber,
+                                    camberPos = CAMBER_POS,
+                                    thickness = self.statorVars['Blade Thickness (Stator)'] / 100,
+                                    bladeHeight = actualBladeHeight,
+                                    twistAngle = np.rad2deg(avgBetaRoot - avgBetaTip),
+                                    rootChord = self.statorVars['Root Chord (Stator)'],
+                                    tipChord = self.statorVars['Tip Chord (Stator)'],
                                     cot = [self.statorVars['X Twist (Stator)'], self.statorVars['Y Twist (Stator)']])
-                                    
-            #Get Bounds for That Blade
-            minx, maxx, miny, maxy, minz, maxz = FindBounds(blade)
-            
+
             #Rotate, Move, and Rotate the Blade
             blade.rotate([0, 0, 1], np.deg2rad(-rootAngle))
             blade.y += (((hmaxx - hminx)) / 2) - (relativeBladeHeight / 2)
             blade.z += (((hmaxy - hminy)) / 2) - (relativeBladeHeight / 2)
-            blade.rotate([1, 0, 0], np.deg2rad(rootAngle + ((360 / 10) * i)))
-            
+            blade.rotate([1, 0, 0], np.deg2rad(rootAngle + ((360.0 / num_blades) * i)))
+
             #Move to Specified Location
             blade.x += self.statorVars['Mount Can Loc']
-            blades.append(blade) 
-    
-        #Join Blades and Mount Can
-        for blade in blades:
-            self.mountCan = mesh.Mesh(np.concatenate([self.mountCan.data, blade.data]))
-            
-        #Add Duct
-        self.mountCan = mesh.Mesh(np.concatenate([self.mountCan.data, duct.data]))
+            blades.append(blade)
+
+        #Join Blades and Mount Can + Duct in a single concat
+        parts = [self.mountCan.data] + [b.data for b in blades] + [duct.data]
+        self.mountCan = mesh.Mesh(np.concatenate(parts))
             
         #Render That 
         self.render()
