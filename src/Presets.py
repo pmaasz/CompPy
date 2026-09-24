@@ -195,8 +195,10 @@ def get_preset_names():
     return list(PRESETS.keys())
 
 def get_preset(name):
-    """Get preset configuration by name"""
-    return PRESETS.get(name, None)
+    """Get preset configuration by name (deep copy; caller may mutate)."""
+    import copy
+    preset = PRESETS.get(name, None)
+    return copy.deepcopy(preset) if preset is not None else None
 
 def get_preset_description(name):
     """Get description for a preset"""

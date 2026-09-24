@@ -37,9 +37,15 @@ class ErrorLogger:
         """Setup logging configuration"""
         self.logger = logging.getLogger('CompPy')
         self.logger.setLevel(logging.DEBUG)
-        
-        # File handler
-        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
+        # Avoid duplicate handlers on re-init (e.g. tests, fork).
+        if self.logger.handlers:
+            return
+
+        # Rotating file handler (was unbounded FileHandler).
+        from logging.handlers import RotatingFileHandler
+        file_handler = RotatingFileHandler(
+            self.log_file, maxBytes=5 * 1024 * 1024, backupCount=3,
+            encoding='utf-8')
         file_handler.setLevel(logging.DEBUG)
         
         # Console handler (only errors and above)
@@ -57,6 +63,12 @@ class ErrorLogger:
         # Add handlers
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
+
+        # Best-effort cleanup of logs older than 30 days.
+        try:
+            self.clear_old_logs()
+        except Exception:
+            pass
     
     def debug(self, message):
         """Log debug message"""

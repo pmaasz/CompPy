@@ -3,14 +3,9 @@ Enhanced 3D Assembly Viewer for CompPy
 Shows all stages together with animation capabilities
 """
 
-try:
-    from PyQt4.QtGui import *
-    from PyQt4.QtCore import *
-    
-except ImportError:
-    from PyQt5.QtCore import * 
-    from PyQt5.QtGui import *
-    from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
     
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -124,9 +119,9 @@ class AssemblyViewer(QWidget):
             try:
                 rotor_renderer = RenderRotor(temp_widget, common, rotor_params, False)
                 rotor_mesh = rotor_renderer.getObj()
-                if rotor_mesh:
+                if rotor_mesh is not None:
                     self.meshes.append({
-                        'mesh': rotor_mesh,
+                        'vectors': rotor_mesh.vectors.copy(),
                         'type': 'rotor',
                         'offset': axial_offset,
                         'stage': stage_data['stage_num']
@@ -134,16 +129,19 @@ class AssemblyViewer(QWidget):
                     # Update offset based on rotor length
                     hub_length = float(rotor_params.get('Hub Length', 30))
                     axial_offset += hub_length * 1.2
+                rotor_renderer.deleteLater()
             except Exception as e:
-                print(f"Error rendering rotor for stage {stage_data['stage_num']}: {e}")
-            
+                from ErrorLogger import logger as _logger
+                _logger.error(f"Error rendering rotor for stage {stage_data['stage_num']}: {e}",
+                              exc_info=True)
+
             # Generate stator mesh
             try:
                 stator_renderer = RenderStator(temp_widget, common, stator_params)
                 stator_mesh = stator_renderer.getObj()
-                if stator_mesh:
+                if stator_mesh is not None:
                     self.meshes.append({
-                        'mesh': stator_mesh,
+                        'vectors': stator_mesh.vectors.copy(),
                         'type': 'stator',
                         'offset': axial_offset,
                         'stage': stage_data['stage_num']
@@ -151,39 +149,39 @@ class AssemblyViewer(QWidget):
                     # Update offset based on stator length
                     duct_length = float(stator_params.get('Duct Length', 40))
                     axial_offset += duct_length * 1.2
+                stator_renderer.deleteLater()
             except Exception as e:
-                print(f"Error rendering stator for stage {stage_data['stage_num']}: {e}")
+                from ErrorLogger import logger as _logger
+                _logger.error(f"Error rendering stator for stage {stage_data['stage_num']}: {e}",
+                              exc_info=True)
         
         # Display all meshes
         self.display_assembly()
         
     def display_assembly(self, rotation=0):
-        """Display all meshes in the assembly"""
+        """Display all meshes in the assembly (non-destructive).
+
+        Previously rotor mesh.vectors were rotated in place every frame,
+        accumulating error. Now rotation is applied to a copy.
+        """
         self.ax.clear()
-        
+
         for mesh_data in self.meshes:
-            mesh = mesh_data['mesh']
+            base_vectors = mesh_data['vectors']
             offset = mesh_data['offset']
             mesh_type = mesh_data['type']
-            
+
+            vectors = base_vectors.copy()
             # Apply rotation to rotors only
             if mesh_type == 'rotor' and rotation != 0:
-                # Rotate mesh around Z axis
-                rotation_matrix = np.array([
-                    [np.cos(rotation), -np.sin(rotation), 0],
-                    [np.sin(rotation), np.cos(rotation), 0],
-                    [0, 0, 1]
-                ])
-                
-                # Rotate vertices
-                for i, vertex in enumerate(mesh.vectors):
-                    for j in range(3):
-                        mesh.vectors[i][j] = rotation_matrix.dot(vertex[j])
-            
+                # Rotate mesh around Z axis (vectorized, no in-place mutation)
+                c, s = np.cos(rotation), np.sin(rotation)
+                rotation_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+                vectors = vectors @ rotation_matrix.T
+
             # Offset mesh along Z axis and plot
             from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-            
-            vectors = mesh.vectors.copy()
+
             vectors[:, :, 2] += offset  # Add axial offset
             
             # Create collection

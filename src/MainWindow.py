@@ -110,7 +110,7 @@ class Ui_MainWindow(object):
         self.YT_Line.setValidator(QDoubleValidator(0.0, 100.0, 3, self.YT_Line))
         self.YT_Line.setToolTip(get_tooltip("Y Twist (Rotor)"))
         self.YT_Line.textChanged.connect(self.CheckState)
-        self.YT_Line.textChanged.connect(self.TrackUndo)
+        self.YT_Line.editingFinished.connect(self.TrackUndo)
         self.YT_Line.textChanged.emit(self.YT_Line.text())
         
         self.gridLayout_2.addWidget(self.YT_Line, 11, 3, 1, 1)
@@ -1567,25 +1567,32 @@ class Ui_MainWindow(object):
     #none
     ################################
     def AddTooltips(self):
-        """Add tooltips to all input fields and connect undo tracking"""
+        """Add tooltips to all input fields and connect undo tracking.
+
+        Undo is tracked on editingFinished (one entry per field commit),
+        not textChanged (which would flood the stack per keystroke).
+        """
         all_fields = list(self.commonValidators.keys()) + \
                      list(self.rotorValidators.keys()) + \
                      list(self.statorValidators.keys())
-        
+
         for field_name in all_fields:
             widget = self.MainWindow.findChild(QLineEdit, field_name)
             if widget:
                 # Add tooltip
                 tooltip = get_tooltip(field_name)
                 if tooltip:
-                    widget.setToolTip(tooltip)
-                
-                # Connect undo tracking (if not already connected)
+                    # Don't clobber live validation tooltips set by CheckState.
+                    if not widget.toolTip():
+                        widget.setToolTip(tooltip)
+
+                # Connect undo tracking once.
                 try:
-                    widget.textChanged.connect(self.TrackUndo)
-                except:
-                    pass  # Already connected
-                
+                    widget.editingFinished.disconnect(self.TrackUndo)
+                except (TypeError, RuntimeError):
+                    pass
+                widget.editingFinished.connect(self.TrackUndo)
+
                 # Initialize field previous values
                 self.field_previous_values[field_name] = widget.text()
     
@@ -1598,22 +1605,22 @@ class Ui_MainWindow(object):
     #none
     ################################
     def TrackUndo(self):
-        """Track field changes for undo"""
+        """Track field changes for undo (called on editingFinished)."""
         sender = self.MainWindow.sender()
-        if not sender or not isinstance(sender, QLineEdit):
+        if sender is None or not isinstance(sender, QLineEdit):
             return
-            
+
         field_name = sender.objectName()
         if not field_name:
             return
-            
+
         new_value = sender.text()
-        
+
         # Get previous value
         old_value = self.field_previous_values.get(field_name, "")
-        
-        # Only track if value actually changed
-        if old_value != new_value and old_value != "":
+
+        # Only track committed changes (skip initial population).
+        if field_name in self.field_previous_values and old_value != new_value:
             state = {
                 'stage_idx': self.clicked if self.clicked is not None else 0,
                 'field_name': field_name,
@@ -1621,11 +1628,11 @@ class Ui_MainWindow(object):
                 'new_value': new_value
             }
             self.undo_manager.push_state(state)
-            
+
             # Update undo/redo button states
             self.actionUndo.setEnabled(self.undo_manager.can_undo())
             self.actionRedo.setEnabled(self.undo_manager.can_redo())
-        
+
         # Store current value as previous
         self.field_previous_values[field_name] = new_value
     
@@ -1644,12 +1651,14 @@ class Ui_MainWindow(object):
             # Restore old value
             widget = self.MainWindow.findChild(QLineEdit, state['field_name'])
             if widget:
-                # Temporarily disconnect to avoid creating new undo state
-                widget.textChanged.disconnect(self.TrackUndo)
-                widget.setText(state['old_value'])
-                widget.textChanged.connect(self.TrackUndo)
+                # Block signals to avoid creating new undo state
+                widget.blockSignals(True)
+                try:
+                    widget.setText(state['old_value'])
+                finally:
+                    widget.blockSignals(False)
                 self.field_previous_values[state['field_name']] = state['old_value']
-            
+
             # Update button states
             self.actionUndo.setEnabled(self.undo_manager.can_undo())
             self.actionRedo.setEnabled(self.undo_manager.can_redo())
@@ -1669,12 +1678,14 @@ class Ui_MainWindow(object):
             # Restore new value
             widget = self.MainWindow.findChild(QLineEdit, state['field_name'])
             if widget:
-                # Temporarily disconnect to avoid creating new undo state
-                widget.textChanged.disconnect(self.TrackUndo)
-                widget.setText(state['new_value'])
-                widget.textChanged.connect(self.TrackUndo)
+                # Block signals to avoid creating new undo state
+                widget.blockSignals(True)
+                try:
+                    widget.setText(state['new_value'])
+                finally:
+                    widget.blockSignals(False)
                 self.field_previous_values[state['field_name']] = state['new_value']
-            
+
             # Update button states
             self.actionUndo.setEnabled(self.undo_manager.can_undo())
             self.actionRedo.setEnabled(self.undo_manager.can_redo())
@@ -1845,8 +1856,7 @@ class Ui_MainWindow(object):
                     f"File no longer exists:\n{filepath}"
                 )
                 # Remove from recent files
-                self.recent_files_manager.recent_files.remove(filepath)
-                self.recent_files_manager.save()
+                self.recent_files_manager.remove_file(filepath)
                 self.UpdateRecentFilesMenu()
                 return
             

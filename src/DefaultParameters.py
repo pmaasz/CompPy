@@ -96,8 +96,9 @@ DESIGN_RULES = {
 
 
 def get_default_parameters():
-    """Get default parameters for a new stage"""
-    return DEFAULT_STAGE_PARAMETERS.copy()
+    """Get default parameters for a new stage (deep copy)."""
+    import copy
+    return copy.deepcopy(DEFAULT_STAGE_PARAMETERS)
 
 
 def get_recommended_range(parameter_name):
