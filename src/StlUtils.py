@@ -1,6 +1,21 @@
 from stl import mesh
 import numpy as np
-from BladeCalc import * 
+from BladeCalc import NACA4Blade
+
+
+def _unique_faces(faces):
+    """Deduplicate faces while preserving order (deterministic STL).
+
+    The previous set(tuple(...)) randomized triangle order on every run.
+    """
+    seen = set()
+    unique = []
+    for f in faces:
+        key = tuple(f)
+        if key not in seen:
+            seen.add(key)
+            unique.append(list(f))
+    return np.array(unique)
 
 
 ################################
@@ -14,10 +29,13 @@ from BladeCalc import *
 ##Returns:
 #cylinder: cylinder mesh object
 ################################
-def drawCylinder(dia, height, res = 25):
+def drawCylinder(dia, height, res=25):
+    if dia <= 0 or height <= 0:
+        raise ValueError("dia and height must be > 0")
+    if res < 3:
+        raise ValueError("res must be >= 3")
     botOrigin = [0, 0, 0]
     topOrigin = [0, 0, height]
-    nspan = 1
 
     #Draw Lower Verts 
     vertices = [[botOrigin[0] + dia / 2 * np.cos(np.deg2rad((360 / res) * i)), botOrigin[1] + dia / 2 * np.sin(np.deg2rad((360 / res) * i)), botOrigin[2]] for i in range(1, res + 1)]
@@ -49,8 +67,8 @@ def drawCylinder(dia, height, res = 25):
         faces.append([vert, nextVert, res + 1])
         faces.append([vert, nextVert, conVert])
 
-    #Delete Any Duplicates IF Any Were Created
-    faces = np.array([list(x) for x in  set(tuple(x) for x in faces)])
+    #Delete Any Duplicates IF Any Were Created (order-preserving)
+    faces = _unique_faces(faces)
 
     # Create the mesh
     cylinder = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
@@ -74,10 +92,13 @@ def drawCylinder(dia, height, res = 25):
 ##Returns:
 #duct: duct mesh object
 ################################
-def drawDuct(innerDia, thickness, height, res = 25):
+def drawDuct(innerDia, thickness, height, res=25):
+    if innerDia <= 0 or height <= 0 or thickness <= 0:
+        raise ValueError("innerDia, thickness and height must be > 0")
+    if res < 3:
+        raise ValueError("res must be >= 3")
     botOrigin = [0, 0, 0]
     topOrigin = [0, 0, height]
-    nspan = 1    
 
     #Draw Lower Outer Verts 
     outer = [[botOrigin[0] + ((innerDia / 2) + thickness) * np.cos(np.deg2rad((360 / res) * i)), botOrigin[1] + ((innerDia / 2) + thickness) * np.sin(np.deg2rad((360 / res) * i)), botOrigin[2]] for i in range(1, res + 1)]
@@ -115,7 +136,7 @@ def drawDuct(innerDia, thickness, height, res = 25):
         faces.append([vert, nextVert, conVert])
         faces.append([vert + 2 * res, nextVert + 2 * res, conVert + 2 * res])
         
-    faces = np.array([list(x) for x in  set(tuple(x) for x in faces)])
+    faces = _unique_faces(faces)
 
     # Create the mesh
     duct = mesh.Mesh(np.zeros(faces.shape[0], dtype=mesh.Mesh.dtype))
@@ -181,10 +202,10 @@ def drawBlade(camberRoot, camberTip, camberPos, thickness, bladeHeight, twistAng
 #rotation matrix (array)
 ################################
 def rotationMatrix(axis, theta):
-    axis = np.asarray(axis)
-    # No need to rotate if there is no actual rotation
+    axis = np.asarray(axis, dtype=float)
+    # Zero axis means no rotation axis: identity (was zeros, which collapses vectors).
     if not axis.any():
-        return np.zeros((3, 3))
+        return np.eye(3)
 
     theta = 0.5 * np.asarray(theta)
 

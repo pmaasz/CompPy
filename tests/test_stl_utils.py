@@ -84,9 +84,9 @@ class TestStlUtils(unittest.TestCase):
     def test_rotation_matrix_no_rotation(self):
         """Test rotation matrix with zero axis"""
         R = rotationMatrix([0, 0, 0], 0)
-        
-        # Should return zero matrix
-        self.assertTrue(np.allclose(R, np.zeros((3, 3))))
+
+        # Zero axis means identity (no rotation)
+        self.assertTrue(np.allclose(R, np.eye(3)))
 
 
 if __name__ == '__main__':
