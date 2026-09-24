@@ -122,6 +122,35 @@ Known Issues
 - There have been reports of freezing and/or extreme wait times for larger (~ 1 meter) scaled rotors and stators. I'm also looking into that, but at that size blade, you wouldn't want to use a single piece anyways as the rotor anyways...
 
 
+New Features
+""""""""""""
+**UI/UX Enhancements:**
+
+- **Tooltips & Help**: Hover over any input field to see detailed descriptions, usage guidance, and valid ranges
+- **Undo/Redo**: Track parameter changes with full undo/redo support (Ctrl+Z / Ctrl+Y)
+- **Parameter Presets**: Quick-load common compressor configurations from the Presets menu:
+  
+  - Micro Turbine - Single Stage
+  - RC Ducted Fan - High Speed  
+  - Industrial Compressor - Low Speed
+  - High Pressure Ratio - Multi-Stage
+  - Educational Example - Simple
+
+- **Assembly Viewer**: View all stages together in 3D with rotation animation and multiple camera views
+- **Drag-and-Drop Reordering**: Reorder stages by dragging them in the stage list
+- **Real-time Validation**: Enhanced visual feedback with explanatory tooltips for invalid inputs
+
+**Quick Wins (High Impact Features):**
+
+- **Recent Files Menu**: Quick access to recently opened designs (File > Recent Files)
+- **Progress Indicators**: Visual feedback during long STL mesh generation operations
+- **Error Logging**: Automatic logging of all errors to `~/.comppy/logs/` for debugging
+- **Default Parameters**: New stages automatically filled with sensible, validated defaults
+- **Keyboard Shortcuts**: Ctrl+O (Open), Ctrl+S (Save), Ctrl+Z (Undo), Ctrl+Y (Redo)
+
+See ``docs/UI_ENHANCEMENTS.md`` and ``docs/QUICK_WINS.md`` for detailed documentation.
+
+
 What's To Come
 """"""""""""""
 - Rotor/stator performance statistics in the program.

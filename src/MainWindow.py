@@ -12,6 +12,13 @@ except ImportError:
 import BladePlot
 import RenderWindow
 from FileOps import *
+from UndoRedo import UndoRedoManager
+from Tooltips import get_tooltip, get_validation_message
+from Presets import get_preset_names, get_preset, get_preset_description
+from AssemblyViewer import AssemblyViewer
+from RecentFiles import RecentFilesManager
+from ErrorLogger import logger
+from DefaultParameters import get_default_parameters, validate_design_rules, apply_defaults_to_stage
 
 
 class Ui_MainWindow(object):
@@ -64,6 +71,19 @@ class Ui_MainWindow(object):
         self.fileOpen = False
         self.failed = []
         self.darkMode = True
+        
+        # Initialize undo/redo manager
+        self.undo_manager = UndoRedoManager()
+        
+        # Track current values for undo
+        self.field_previous_values = {}
+        
+        # Initialize recent files manager
+        self.recent_files_manager = RecentFilesManager()
+        
+        # Initialize error logger
+        logger.info("CompPy started")
+        logger.debug(f"Window size: {MainWindow.width()}x{MainWindow.height()}")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         
@@ -92,7 +112,9 @@ class Ui_MainWindow(object):
         self.YT_Line.setAlignment(Qt.AlignCenter)
         self.YT_Line.setObjectName("Y Twist (Rotor)")
         self.YT_Line.setValidator(QDoubleValidator(0.0, 100.0, 3, self.YT_Line))
+        self.YT_Line.setToolTip(get_tooltip("Y Twist (Rotor)"))
         self.YT_Line.textChanged.connect(self.CheckState)
+        self.YT_Line.textChanged.connect(self.TrackUndo)
         self.YT_Line.textChanged.emit(self.YT_Line.text())
         
         self.gridLayout_2.addWidget(self.YT_Line, 11, 3, 1, 1)
@@ -686,17 +708,84 @@ class Ui_MainWindow(object):
         self.actionSave.setStatusTip("Save File")
         self.actionSave.triggered.connect(self.SaveFile)
         
+        # Recent files menu
+        self.menuRecentFiles = QMenu(self.menuFile)
+        self.menuRecentFiles.setObjectName("menuRecentFiles")
+        
+        # Clear recent files action (create before UpdateRecentFilesMenu)
+        self.actionClearRecent = QAction(MainWindow)
+        self.actionClearRecent.setObjectName("actionClearRecent")
+        self.actionClearRecent.setStatusTip("Clear Recent Files")
+        self.actionClearRecent.triggered.connect(self.ClearRecentFiles)
+        
+        # Now update the menu
+        self.UpdateRecentFilesMenu()
+        
+        # Undo/Redo actions
+        self.actionUndo = QAction(MainWindow)
+        self.actionUndo.setObjectName("actionUndo")
+        self.actionUndo.setShortcut("Ctrl+Z")
+        self.actionUndo.setStatusTip("Undo")
+        self.actionUndo.triggered.connect(self.Undo)
+        self.actionUndo.setEnabled(False)
+        
+        self.actionRedo = QAction(MainWindow)
+        self.actionRedo.setObjectName("actionRedo")
+        self.actionRedo.setShortcut("Ctrl+Y")
+        self.actionRedo.setStatusTip("Redo")
+        self.actionRedo.triggered.connect(self.Redo)
+        self.actionRedo.setEnabled(False)
+        
+        # Presets menu
+        self.menuPresets = QMenu(self.menubar)
+        self.menuPresets.setObjectName("menuPresets")
+        
+        # Tools menu
+        self.menuTools = QMenu(self.menubar)
+        self.menuTools.setObjectName("menuTools")
+        
+        # Assembly viewer action
+        self.actionAssemblyView = QAction(MainWindow)
+        self.actionAssemblyView.setObjectName("actionAssemblyView")
+        self.actionAssemblyView.setStatusTip("View All Stages Together")
+        self.actionAssemblyView.triggered.connect(self.ShowAssemblyView)
+        
         self.actionToggleDarkMode = QAction(MainWindow)
         self.actionToggleDarkMode.setObjectName("actionToggleDarkMode")
         self.actionToggleDarkMode.setCheckable(True)
         self.actionToggleDarkMode.setChecked(True)
         self.actionToggleDarkMode.setStatusTip("Toggle Dark Mode")
         self.actionToggleDarkMode.triggered.connect(self.ToggleDarkMode)
+        
+        # View log file action
+        self.actionViewLog = QAction(MainWindow)
+        self.actionViewLog.setObjectName("actionViewLog")
+        self.actionViewLog.setStatusTip("View Error Log File")
+        self.actionViewLog.triggered.connect(self.ViewLogFile)
 
         self.menuFile.addAction(self.actionOpen)
         self.menuFile.addAction(self.actionSave)
+        self.menuFile.addSeparator()
+        self.menuFile.addMenu(self.menuRecentFiles)
+        self.menuRecentFiles.addAction(self.actionClearRecent)
+        self.menuFile.addSeparator()
+        self.menuFile.addAction(self.actionUndo)
+        self.menuFile.addAction(self.actionRedo)
+        
+        # Add preset actions dynamically
+        for preset_name in get_preset_names():
+            action = QAction(preset_name, MainWindow)
+            action.setStatusTip(get_preset_description(preset_name))
+            action.triggered.connect(lambda checked, name=preset_name: self.LoadPreset(name))
+            self.menuPresets.addAction(action)
+        
+        self.menuTools.addAction(self.actionAssemblyView)
+        self.menuTools.addSeparator()
+        self.menuTools.addAction(self.actionViewLog)
         self.menuView.addAction(self.actionToggleDarkMode)
         self.menubar.addAction(self.menuFile.menuAction())
+        self.menubar.addAction(self.menuPresets.menuAction())
+        self.menubar.addAction(self.menuTools.menuAction())
         self.menubar.addAction(self.menuView.menuAction())
 
         #Set Tab Order
@@ -728,6 +817,13 @@ class Ui_MainWindow(object):
         MainWindow.setTabOrder(self.XT_Line_2, self.YT_Line_2)
         
         self.retranslateUi(MainWindow)
+        
+        # Add tooltips to all input fields
+        self.AddTooltips()
+        
+        # Enable drag and drop for stage list
+        self.listWidget.setDragDropMode(QAbstractItemView.InternalMove)
+        
         QMetaObject.connectSlotsByName(MainWindow)
 
 
@@ -779,9 +875,17 @@ class Ui_MainWindow(object):
         self.XT_Label_2.setText("Center of X Twist")
         self.YT_Label_2.setText("Center of Y Twist")
         self.menuFile.setTitle("File")
+        self.menuRecentFiles.setTitle("Recent Files")
+        self.menuPresets.setTitle("Presets")
+        self.menuTools.setTitle("Tools")
         self.menuView.setTitle("View")
         self.actionOpen.setText("Open")
         self.actionSave.setText("Save")
+        self.actionClearRecent.setText("Clear Recent Files")
+        self.actionUndo.setText("Undo")
+        self.actionRedo.setText("Redo")
+        self.actionAssemblyView.setText("Assembly Viewer")
+        self.actionViewLog.setText("View Error Log")
         self.actionToggleDarkMode.setText("Dark Mode")
         
         # Apply dark mode theme on startup
@@ -799,19 +903,27 @@ class Ui_MainWindow(object):
         #Open open file dialog window
         name = QFileDialog.getOpenFileName(self.MainWindow, "Open File",  None, 'Json files (*.json)')
         
+        logger.info("Opening file dialog")
+        
         # Check if user cancelled
         if version == 5:
             if not name[0]:
+                logger.debug("User cancelled file open")
                 return
-            name = name[0]
-        elif not name:
-            return
+            filename = name[0]
+        else:
+            if not name:
+                logger.debug("User cancelled file open")
+                return
+            filename = name
+        
+        logger.info(f"Opening file: {filename}")
         
         #Clear the list of anything
         self.listWidget.clear()
         try:
             #Set dictionaries with incoming vars
-            self.commonVars, self.rotorVars, self.statorVars = map(list, zip(*list(StageOpen(name))))
+            self.commonVars, self.rotorVars, self.statorVars = map(list, zip(*list(StageOpen(filename))))
             
             #Add the stages
             for i in range(1, len(self.commonVars) + 1):
@@ -832,6 +944,11 @@ class Ui_MainWindow(object):
                 # Select first item in list
                 self.listWidget.setCurrentRow(0)
                 
+                # Add to recent files
+                self.recent_files_manager.add_file(filename)
+                self.UpdateRecentFilesMenu()
+                logger.info(f"Successfully opened file: {filename}")
+                
                 # Show success message
                 box = QMessageBox(self.MainWindow)
                 box.setText("File Loaded Successfully")
@@ -841,6 +958,7 @@ class Ui_MainWindow(object):
                 box.exec_()
             
         except EOFError: 
+            logger.error("Invalid file format (EOFError)")
             box = QMessageBox(self.MainWindow)
             box.setText("Invalid File Format")
             box.setInformativeText("Confirm file is a valid CompPy JSON file.")
@@ -848,6 +966,7 @@ class Ui_MainWindow(object):
             box.setIcon(QMessageBox.Critical)
             box.exec_()
         except Exception as e:
+            logger.error(f"Error loading file: {e}", exc_info=True)
             box = QMessageBox(self.MainWindow)
             box.setText("Error Loading File")
             box.setInformativeText(f"An error occurred: {str(e)}")
@@ -905,6 +1024,11 @@ class Ui_MainWindow(object):
         try:
             StageSave(name, self.commonVars, self.rotorVars, self.statorVars)
             
+            # Add to recent files
+            self.recent_files_manager.add_file(name)
+            self.UpdateRecentFilesMenu()
+            logger.info(f"Successfully saved file: {name}")
+            
             # Show success message
             box = QMessageBox(self.MainWindow)
             box.setText("File Saved Successfully")
@@ -914,6 +1038,7 @@ class Ui_MainWindow(object):
             box.exec_()
             
         except Exception as e:
+            logger.error(f"Error saving file: {e}", exc_info=True)
             box = QMessageBox(self.MainWindow)
             box.setText("Error Saving File")
             box.setInformativeText(f"An error occurred: {str(e)}")
@@ -965,14 +1090,24 @@ class Ui_MainWindow(object):
     ##Returns:
     #none
     ################################   
-    def AddStage(self):            
-        #Add stage list item
-        self.listWidget.addItem("Stage {}".format(self.listWidget.count() + 1))
+    def AddStage(self):
+        try:
+            logger.debug("Adding new stage")
+            # Get default parameters
+            defaults = get_default_parameters()
+            
+            #Add stage list item
+            self.listWidget.addItem("Stage {}".format(self.listWidget.count() + 1))
 
-        #Add new stage vars
-        self.rotorVars.append({"Y Twist (Rotor)" : "", "X Twist (Rotor)" : "", "Tip Chord (Rotor)" : "", "Rotor Diameter" : "", "Root Chord (Rotor)" : "", "Blade Thickness (Rotor)" : "", "Hub Diameter" : "", "Hub Length" : "", "Blade Clearance" : "", "Num of Blade (Rotor)" : ""})
-        self.statorVars.append({"Duct ID" : "", "Duct Length" : "", "Duct Thickness" : "", "Num of Blade (Stator)" : "", "Mount Can Length" : "", "Mount Can Dia" : "", "Mount Can Loc" : "", "Blade Thickness (Stator)" : "", "Root Chord (Stator)" : "", "Tip Chord (Stator)" : "", "X Twist (Stator)" : "", "Y Twist (Stator)" : ""})
-        self.commonVars.append({"RPM" : "", "Loading (Psi)" : "", "Flow (Phi)" : "", "Reaction (R)" : "", "Mean Line Radius" : ""})
+            #Add new stage vars with defaults
+            self.rotorVars.append(defaults['Rotor'].copy())
+            self.statorVars.append(defaults['Stator'].copy())
+            self.commonVars.append(defaults['Stage'].copy())
+            
+            logger.info(f"Added stage {len(self.commonVars)} with default parameters")
+            
+        except Exception as e:
+            logger.error(f"Error adding stage: {e}", exc_info=True)
         
         
     ################################
@@ -1103,23 +1238,26 @@ class Ui_MainWindow(object):
             if sender.objectName() in dict:
                 dict[sender.objectName()] = state
             else: continue
-            
-        #Set color of qLineEdit box (theme-aware) and tooltip
+        
+        field_name = sender.objectName()
+        base_tooltip = get_tooltip(field_name)
+        
+        #Set color of qLineEdit box (theme-aware) and tooltip with validation feedback
         if state == QValidator.Acceptable:
             bgcolor = "#00cc44" if self.darkMode else "#009933" # green
-            sender.setToolTip("")  # Clear tooltip on valid input
+            sender.setToolTip(base_tooltip)  # Show normal tooltip
         elif state == QValidator.Intermediate:
             bgcolor = "#cccc00" if self.darkMode else "#ffff00" # yellow
-            valid_range = self.validRanges.get(sender.objectName(), "see documentation")
-            sender.setToolTip(f"Incomplete input. Valid range: {valid_range}")
+            valid_range = self.validRanges.get(field_name, "see documentation")
+            hint = f"{base_tooltip}\n\n⚠ Value incomplete or out of range\nValid: {valid_range}"
+            sender.setToolTip(hint)
         else:
             bgcolor = "#ff3333" if self.darkMode else "#ff0000" # red
-            valid_range = self.validRanges.get(sender.objectName(), "see documentation")
-            sender.setToolTip(f"Invalid input! Valid range: {valid_range}")
-        
-        # Always use black text on validation colors for readability
+            valid_range = self.validRanges.get(field_name, "see documentation")
+            error_msg = f"{base_tooltip}\n\n❌ Invalid value!\nValid: {valid_range}"
+            sender.setToolTip(error_msg)
+            
         sender.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
-    
         
     ################################
     ##Function: CheckAllStates
@@ -1277,11 +1415,22 @@ class Ui_MainWindow(object):
                 self.CheckAllStates("R")
                 
                 #If there was no failure
-                if not self.failed: 
+                if not self.failed:
+                    # Create progress dialog
+                    progress = QProgressDialog("Generating rotor mesh...", None, 0, 0, self.MainWindow)
+                    progress.setWindowTitle("Rendering Rotor")
+                    progress.setWindowModality(Qt.WindowModal)
+                    progress.show()
+                    QApplication.processEvents()
+                    
+                    logger.info("Rendering rotor")
                     rend = RenderWindow.RenderWindow(self.MainWindow, self.commonVars[self.clicked], self.rotorVars[self.clicked], "R", self.wallCheck.isChecked())
                     self.R_FrameLayout.addWidget(rend)
                     self.R_Frame.setLayout(self.R_FrameLayout)
                     self.exportObj = rend.returnObject()
+                    
+                    progress.close()
+                    logger.info("Rotor rendered successfully")
                     
                 #If there was a failure, show the failures
                 else: ErrorWindow(self.MainWindow, self.failed).show()
@@ -1413,6 +1562,374 @@ class Ui_MainWindow(object):
                         else:
                             bgcolor = "#ff0000" if not self.darkMode else "#ff3333"
                         widget.setStyleSheet("QLineEdit { background-color: %s; color: #000000; }" % bgcolor)
+    
+    ################################
+    ##Function: AddTooltips
+    #Add tooltips to all input fields
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def AddTooltips(self):
+        """Add tooltips to all input fields and connect undo tracking"""
+        all_fields = list(self.commonValidators.keys()) + \
+                     list(self.rotorValidators.keys()) + \
+                     list(self.statorValidators.keys())
+        
+        for field_name in all_fields:
+            widget = self.MainWindow.findChild(QLineEdit, field_name)
+            if widget:
+                # Add tooltip
+                tooltip = get_tooltip(field_name)
+                if tooltip:
+                    widget.setToolTip(tooltip)
+                
+                # Connect undo tracking (if not already connected)
+                try:
+                    widget.textChanged.connect(self.TrackUndo)
+                except:
+                    pass  # Already connected
+                
+                # Initialize field previous values
+                self.field_previous_values[field_name] = widget.text()
+    
+    ################################
+    ##Function: TrackUndo
+    #Track changes for undo/redo functionality
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def TrackUndo(self):
+        """Track field changes for undo"""
+        sender = self.MainWindow.sender()
+        if not sender or not isinstance(sender, QLineEdit):
+            return
+            
+        field_name = sender.objectName()
+        if not field_name:
+            return
+            
+        new_value = sender.text()
+        
+        # Get previous value
+        old_value = self.field_previous_values.get(field_name, "")
+        
+        # Only track if value actually changed
+        if old_value != new_value and old_value != "":
+            state = {
+                'stage_idx': self.clicked if self.clicked is not None else 0,
+                'field_name': field_name,
+                'old_value': old_value,
+                'new_value': new_value
+            }
+            self.undo_manager.push_state(state)
+            
+            # Update undo/redo button states
+            self.actionUndo.setEnabled(self.undo_manager.can_undo())
+            self.actionRedo.setEnabled(self.undo_manager.can_redo())
+        
+        # Store current value as previous
+        self.field_previous_values[field_name] = new_value
+    
+    ################################
+    ##Function: Undo
+    #Undo last change
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def Undo(self):
+        """Undo last parameter change"""
+        state = self.undo_manager.undo()
+        if state:
+            # Restore old value
+            widget = self.MainWindow.findChild(QLineEdit, state['field_name'])
+            if widget:
+                # Temporarily disconnect to avoid creating new undo state
+                widget.textChanged.disconnect(self.TrackUndo)
+                widget.setText(state['old_value'])
+                widget.textChanged.connect(self.TrackUndo)
+                self.field_previous_values[state['field_name']] = state['old_value']
+            
+            # Update button states
+            self.actionUndo.setEnabled(self.undo_manager.can_undo())
+            self.actionRedo.setEnabled(self.undo_manager.can_redo())
+    
+    ################################
+    ##Function: Redo
+    #Redo last undone change
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def Redo(self):
+        """Redo last undone change"""
+        state = self.undo_manager.redo()
+        if state:
+            # Restore new value
+            widget = self.MainWindow.findChild(QLineEdit, state['field_name'])
+            if widget:
+                # Temporarily disconnect to avoid creating new undo state
+                widget.textChanged.disconnect(self.TrackUndo)
+                widget.setText(state['new_value'])
+                widget.textChanged.connect(self.TrackUndo)
+                self.field_previous_values[state['field_name']] = state['new_value']
+            
+            # Update button states
+            self.actionUndo.setEnabled(self.undo_manager.can_undo())
+            self.actionRedo.setEnabled(self.undo_manager.can_redo())
+    
+    ################################
+    ##Function: LoadPreset
+    #Load a preset configuration
+    ##Inputs: 
+    #self: Ui_MainWindow
+    #preset_name: name of preset to load
+    ##Returns:
+    #none
+    ################################
+    def LoadPreset(self, preset_name):
+        """Load a preset configuration"""
+        preset = get_preset(preset_name)
+        if not preset:
+            return
+        
+        # Ask user for confirmation
+        reply = QMessageBox.question(
+            self.MainWindow,
+            'Load Preset',
+            f'Load preset "{preset_name}"?\n\n{get_preset_description(preset_name)}\n\nThis will replace current stage values.',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        # Ensure we have at least one stage
+        if not self.commonVars:
+            self.AddStage()
+        
+        # Get current stage index
+        stage_idx = self.clicked if self.clicked is not None else 0
+        
+        # Load preset values into current stage
+        if 'Stage' in preset:
+            for field_name, value in preset['Stage'].items():
+                self.commonVars[stage_idx][field_name] = value
+                widget = self.MainWindow.findChild(QLineEdit, field_name)
+                if widget:
+                    widget.setText(value)
+        
+        if 'Rotor' in preset:
+            for field_name, value in preset['Rotor'].items():
+                self.rotorVars[stage_idx][field_name] = value
+                widget = self.MainWindow.findChild(QLineEdit, field_name)
+                if widget:
+                    widget.setText(value)
+        
+        if 'Stator' in preset:
+            for field_name, value in preset['Stator'].items():
+                self.statorVars[stage_idx][field_name] = value
+                widget = self.MainWindow.findChild(QLineEdit, field_name)
+                if widget:
+                    widget.setText(value)
+        
+        # Clear undo history after loading preset
+        self.undo_manager.clear()
+        self.actionUndo.setEnabled(False)
+        self.actionRedo.setEnabled(False)
+    
+    ################################
+    ##Function: ShowAssemblyView
+    #Show 3D assembly viewer with all stages
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def ShowAssemblyView(self):
+        """Show assembly viewer with all stages"""
+        if not self.commonVars or len(self.commonVars) == 0:
+            QMessageBox.warning(
+                self.MainWindow,
+                "No Stages",
+                "Please add at least one stage before viewing assembly."
+            )
+            return
+        
+        # Prepare stages data
+        stages_data = []
+        for i in range(len(self.commonVars)):
+            stages_data.append({
+                'common': self.commonVars[i],
+                'rotor': self.rotorVars[i],
+                'stator': self.statorVars[i],
+                'stage_num': i + 1
+            })
+        
+        # Create and show assembly viewer window
+        try:
+            self.assembly_window = QDialog(self.MainWindow)
+            self.assembly_window.setWindowTitle("Assembly Viewer")
+            self.assembly_window.resize(1000, 800)
+            
+            layout = QVBoxLayout()
+            viewer = AssemblyViewer(self.assembly_window, stages_data)
+            layout.addWidget(viewer)
+            
+            self.assembly_window.setLayout(layout)
+            self.assembly_window.show()
+        except Exception as e:
+            QMessageBox.critical(
+                self.MainWindow,
+                "Assembly Viewer Error",
+                f"Could not create assembly viewer:\n{str(e)}"
+            )
+    
+    ################################
+    ##Function: UpdateRecentFilesMenu
+    #Update recent files menu with current list
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def UpdateRecentFilesMenu(self):
+        """Update recent files menu"""
+        # Clear existing actions (except Clear Recent Files)
+        self.menuRecentFiles.clear()
+        
+        # Get recent files
+        recent_files = self.recent_files_manager.get_recent_files()
+        
+        # Add recent files
+        for filepath in recent_files:
+            # Create action with just filename
+            filename = os.path.basename(filepath)
+            action = QAction(filename, self.MainWindow)
+            action.setStatusTip(filepath)
+            action.setData(filepath)
+            action.triggered.connect(lambda checked, path=filepath: self.OpenRecentFile(path))
+            self.menuRecentFiles.addAction(action)
+        
+        # Add separator if we have recent files
+        if recent_files:
+            self.menuRecentFiles.addSeparator()
+        
+        # Add clear action
+        self.menuRecentFiles.addAction(self.actionClearRecent)
+        
+        # Disable menu if no recent files
+        self.menuRecentFiles.setEnabled(len(recent_files) > 0 or True)  # Always enable for Clear option
+    
+    ################################
+    ##Function: OpenRecentFile
+    #Open a recent file
+    ##Inputs: 
+    #self: Ui_MainWindow
+    #filepath: path to file
+    ##Returns:
+    #none
+    ################################
+    def OpenRecentFile(self, filepath):
+        """Open a recent file"""
+        try:
+            logger.info(f"Opening recent file: {filepath}")
+            
+            # Check if file exists
+            if not os.path.exists(filepath):
+                QMessageBox.warning(
+                    self.MainWindow,
+                    "File Not Found",
+                    f"File no longer exists:\n{filepath}"
+                )
+                # Remove from recent files
+                self.recent_files_manager.recent_files.remove(filepath)
+                self.recent_files_manager.save()
+                self.UpdateRecentFilesMenu()
+                return
+            
+            # Clear the list
+            self.listWidget.clear()
+            
+            # Load the file
+            self.commonVars, self.rotorVars, self.statorVars = map(list, zip(*list(StageOpen(filepath))))
+            
+            # Add stages to list
+            for i in range(1, len(self.commonVars) + 1):
+                self.listWidget.addItem(f"Stage {i}")
+            
+            # Mark file as open
+            self.fileOpen = True
+            self.clicked = 0
+            
+            # Populate UI with first stage
+            if self.commonVars and self.rotorVars and self.statorVars:
+                for dict in [self.commonVars[0], self.rotorVars[0], self.statorVars[0]]:
+                    for obj in dict:
+                        widget = self.MainWindow.findChild(QLineEdit, obj)
+                        if widget:
+                            widget.setText(str(dict[obj]))
+                
+                self.listWidget.setCurrentRow(0)
+            
+            logger.info(f"Successfully opened recent file: {filepath}")
+            
+        except Exception as e:
+            logger.error(f"Error opening recent file: {e}", exc_info=True)
+            QMessageBox.critical(
+                self.MainWindow,
+                "Error Opening File",
+                f"Could not open file:\n{str(e)}"
+            )
+    
+    ################################
+    ##Function: ClearRecentFiles
+    #Clear recent files list
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def ClearRecentFiles(self):
+        """Clear recent files list"""
+        reply = QMessageBox.question(
+            self.MainWindow,
+            'Clear Recent Files',
+            'Clear all recent files from the menu?',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.recent_files_manager.clear()
+            self.UpdateRecentFilesMenu()
+            logger.info("Cleared recent files list")
+    
+    ################################
+    ##Function: ViewLogFile
+    #Open log file in default editor
+    ##Inputs: 
+    #self: Ui_MainWindow
+    ##Returns:
+    #none
+    ################################
+    def ViewLogFile(self):
+        """Open log file"""
+        try:
+            logger.open_log_file()
+        except Exception as e:
+            QMessageBox.information(
+                self.MainWindow,
+                "Log File Location",
+                f"Log file location:\n{logger.get_log_file_path()}"
+            )
     
     
     ################################
