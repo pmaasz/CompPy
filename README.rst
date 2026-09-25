@@ -1,4 +1,4 @@
-CompPy - Compressor Design
+openCompressor (CompPy) - Compressor Design
 ==========================
 
 This is a standalone axial compressor design program. I built this after the frustrating and monotonous task of using Python scripts in Blender to create and render axial compressor objects. Given user specified parameters, the program will render the object (rotor or stator) in the window and export the rendered object as a .STL file.
